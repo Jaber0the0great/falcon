@@ -1,0 +1,41 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="container d-flex justify-content-center align-items-center h-100">
+    <div class="card bg-dark text-light border-secondary p-4 shadow-lg rounded-4" style="max-width: 400px; width: 100%; background: rgba(30, 41, 59, 0.7) !important; backdrop-filter: blur(12px);">
+        <div class="text-center mb-4">
+            <h1 class="h3 fw-bold mb-1">Join Falcon</h1>
+            <p class="text-secondary small">Create a new account.</p>
+        </div>
+        
+        <form id="register-form">
+            <div class="mb-3">
+                <input type="text" id="username" class="form-control bg-dark text-light border-secondary" placeholder="Choose a Username" aria-label="Choose a Username" required>
+            </div>
+            <div class="mb-4">
+                <input type="password" id="password" class="form-control bg-dark text-light border-secondary" placeholder="Choose a Password" aria-label="Choose a Password" required>
+            </div>
+            <button type="submit" class="btn btn-primary w-100 fw-bold">Register</button>
+        </form>
+        <p class="text-center mt-3 text-secondary small">Already have an account? <a href="/login" class="text-primary text-decoration-none fw-bold">Login here</a></p>
+    </div>
+</div>
+<script>
+document.getElementById('register-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const u = document.getElementById('username').value;
+    const p = document.getElementById('password').value;
+    
+    const res = await fetch('/auth/register', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({username: u, password: p})
+    });
+    const data = await res.json();
+    if(data.success) {
+        window.location.href = '/';
+    } else {
+        alert(data.error);
+    }
+});
+</script>
+{% endblock %}
