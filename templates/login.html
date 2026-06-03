@@ -32,7 +32,11 @@ document.getElementById('login-form').addEventListener('submit', async (e) => {
     });
     const data = await res.json();
     if(data.success) {
-        window.location.href = '/';
+        if(data.is_admin) {
+            window.location.href = '/admin';
+        } else {
+            window.location.href = '/';
+        }
     } else {
         alert(data.error);
     }
