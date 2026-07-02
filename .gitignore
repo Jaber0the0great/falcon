@@ -1,0 +1,51 @@
+# Environment
+.env
+.venv/
+env/
+venv/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# Uploaded files
+static/uploads/*
+!static/uploads/.gitkeep
+
+# Flask
+instance/
+flask_session/
+
+# Desktop admin config (may contain credentials)
+admin_config.ini
+
+# Binary tools
+cloudflared.exe
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Security reports (generated, not source)
+SECURITY_REPORT*.md
+ROOT_CAUSE_ANALYSIS*.md
+SECURITY_DEPENDENCY_GRAPH*.md
+SECURITY_HARDENING_PLAN*.md
+SECURITY_IMPLEMENTATION_ROADMAP*.md
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Logs
+*.log

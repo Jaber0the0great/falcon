@@ -1,0 +1,1064 @@
+{% extends 'base.html' %}
+{% block content %}
+<style>
+    /* Modern Dark Theme - WhatsApp/Discord Inspired */
+    :root {
+        --bg-dark: #0f172a;
+        --bg-sidebar: #1e293b;
+        --bg-chat: #0b1120;
+        --text-primary: #f8fafc;
+        --text-secondary: #94a3b8;
+        --accent: #3b82f6;
+        --accent-hover: #2563eb;
+        --msg-mine: #1d4ed8;
+        --msg-other: #334155;
+        --border-color: #334155;
+    }
+    
+    body, html {
+        height: 100%;
+        height: 100dvh;
+        width: 100%;
+        max-width: 100%;
+        margin: 0;
+        font-family: 'Inter', system-ui, sans-serif;
+        background-color: var(--bg-dark);
+        color: var(--text-primary);
+        overflow: hidden;
+    }
+
+    .chat-layout {
+        display: flex;
+        height: 100%;
+        width: 100%;
+        max-width: 100%;
+        overflow: hidden;
+        position: relative;
+    }
+
+    /* Sidebar */
+    .sidebar {
+        width: 350px;
+        background-color: var(--bg-sidebar);
+        border-right: 1px solid var(--border-color);
+        display: flex;
+        flex-direction: column;
+        flex-shrink: 0;
+        height: 100%;
+        overflow: hidden;
+    }
+
+    .sidebar-header {
+        padding: 20px;
+        border-bottom: 1px solid var(--border-color);
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        background-color: #1e293b;
+    }
+
+    .search-bar {
+        padding: 15px;
+        background-color: var(--bg-sidebar);
+    }
+
+    .search-input {
+        width: 100%;
+        padding: 10px 15px;
+        border-radius: 20px;
+        border: none;
+        background-color: #0f172a;
+        color: white;
+        outline: none;
+    }
+
+    .user-list {
+        flex-grow: 1;
+        overflow-y: auto;
+        padding: 10px;
+    }
+
+    .user-item {
+        display: flex;
+        align-items: center;
+        padding: 12px 15px;
+        border-radius: 10px;
+        transition: background 0.2s;
+        margin-bottom: 5px;
+    }
+
+    .user-item:hover, .user-item.active, .user-item:focus-within {
+        background-color: #334155;
+    }
+
+    .user-chat-btn {
+        background: none;
+        border: none;
+        padding: 0;
+        margin: 0;
+        text-align: left;
+        color: inherit;
+        display: flex;
+        align-items: center;
+        flex-grow: 1;
+        cursor: pointer;
+        width: 100%;
+        outline: none;
+    }
+
+    .status-dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        margin-right: 12px;
+    }
+    .online { background-color: #22c55e; box-shadow: 0 0 8px #22c55e; }
+    .offline { background-color: #64748b; }
+
+    /* Main Chat Area */
+    .main-chat {
+        flex-grow: 1;
+        display: flex;
+        flex-direction: column;
+        background-color: var(--bg-chat);
+        position: relative;
+        height: 100%;
+        min-height: 0;
+        overflow: hidden;
+    }
+
+    .chat-header {
+        padding: 15px 25px;
+        background-color: var(--bg-sidebar);
+        border-bottom: 1px solid var(--border-color);
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        height: 70px;
+        flex-shrink: 0;
+    }
+
+    .messages-area {
+        flex-grow: 1;
+        padding: 20px;
+        overflow-y: auto;
+        overflow-x: hidden;
+        display: flex;
+        flex-direction: column;
+        gap: 15px;
+        background-image: url('data:image/svg+xml,%3Csvg width="60" height="60" viewBox="0 0 60 60" xmlns="http://www.w3.org/2000/svg"%3E%3Cg fill="none" fill-rule="evenodd"%3E%3Cg fill="%23ffffff" fill-opacity="0.03"%3E%3Cpath d="M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z"/%3E%3C/g%3E%3C/g%3E%3C/svg%3E');
+    }
+
+    .message-bubble {
+        max-width: 65%;
+        padding: 12px 18px;
+        border-radius: 15px;
+        position: relative;
+        word-wrap: break-word;
+        font-size: 0.95rem;
+        line-height: 1.4;
+    }
+
+    .msg-mine {
+        background-color: var(--msg-mine);
+        align-self: flex-end;
+        border-bottom-right-radius: 4px;
+    }
+
+    .msg-other {
+        background-color: var(--msg-other);
+        align-self: flex-start;
+        border-bottom-left-radius: 4px;
+    }
+
+    .msg-time {
+        font-size: 0.7rem;
+        color: rgba(255,255,255,0.6);
+        text-align: right;
+        margin-top: 5px;
+    }
+
+    .chat-footer {
+        padding: 15px 25px;
+        background-color: var(--bg-sidebar);
+        border-top: 1px solid var(--border-color);
+        display: flex;
+        align-items: center;
+        gap: 15px;
+        flex-shrink: 0;
+    }
+
+    .chat-input {
+        flex-grow: 1;
+        padding: 12px 20px;
+        border-radius: 25px;
+        border: none;
+        background-color: #0f172a;
+        color: white;
+        outline: none;
+        font-size: 1rem;
+    }
+
+    .action-btn {
+        background: none;
+        border: none;
+        color: var(--text-secondary);
+        font-size: 1.5rem;
+        cursor: pointer;
+        transition: color 0.2s;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 10px;
+    }
+
+    .action-btn:hover {
+        color: white;
+    }
+
+    .send-btn {
+        background-color: var(--accent);
+        color: white;
+        border: none;
+        border-radius: 50%;
+        width: 45px;
+        height: 45px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        transition: background 0.2s;
+    }
+
+    .send-btn:hover { background-color: var(--accent-hover); }
+
+    .direct-call-btn {
+        background-color: #22c55e;
+        color: white;
+        border: none;
+        border-radius: 50%;
+        width: 35px;
+        height: 35px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+    }
+
+    /* Hover Message Menu and Selection Styling */
+    .message-bubble:hover .msg-menu-btn {
+        opacity: 1 !important;
+    }
+    .message-bubble {
+        padding-right: 25px !important;
+        position: relative;
+    }
+    .msg-menu-btn:focus {
+        opacity: 1 !important;
+    }
+    .message-row {
+        transition: background 0.3s;
+    }
+
+    /* Mobile Responsive styles */
+    /* ── Reply Bubble (inside a message) ─────────────────────────── */
+    .reply-bubble {
+        background: rgba(0,0,0,0.22);
+        border-left: 3px solid var(--accent);
+        border-radius: 6px;
+        padding: 5px 10px;
+        margin-bottom: 6px;
+        cursor: pointer;
+        max-width: 100%;
+        overflow: hidden;
+        transition: background 0.2s;
+    }
+    .reply-bubble:hover { background: rgba(0,0,0,0.35); }
+    .reply-bubble-sender {
+        font-size: 0.76rem;
+        font-weight: 700;
+        color: var(--accent);
+        margin-bottom: 2px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    .reply-bubble-text {
+        font-size: 0.78rem;
+        color: rgba(255,255,255,0.7);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    /* ── Reply Preview Bar (above footer) ─────────────────────────── */
+    .reply-preview-bar {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 8px 20px;
+        background: #1e293b;
+        border-top: 2px solid var(--accent);
+        flex-shrink: 0;
+    }
+    .reply-preview-content {
+        flex-grow: 1;
+        border-left: 3px solid var(--accent);
+        padding: 3px 10px;
+        overflow: hidden;
+    }
+    .reply-preview-content strong {
+        display: block;
+        font-size: 0.78rem;
+        color: var(--accent);
+        margin-bottom: 1px;
+    }
+    .reply-preview-content span {
+        display: block;
+        font-size: 0.78rem;
+        color: rgba(255,255,255,0.65);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    .reply-cancel-btn {
+        background: none;
+        border: none;
+        color: rgba(255,255,255,0.5);
+        font-size: 1.2rem;
+        cursor: pointer;
+        padding: 4px 8px;
+        border-radius: 50%;
+        transition: color 0.2s, background 0.2s;
+        flex-shrink: 0;
+    }
+    .reply-cancel-btn:hover { color: white; background: rgba(255,255,255,0.1); }
+
+    /* ── Reactions Bar (below message bubble) ─────────────────────── */
+    .reaction-bar-container {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 4px;
+        margin-top: 5px;
+        min-height: 0;
+    }
+    .reaction-chip {
+        background: rgba(255,255,255,0.08);
+        border: 1px solid rgba(255,255,255,0.18);
+        border-radius: 20px;
+        padding: 2px 8px;
+        font-size: 0.82rem;
+        cursor: pointer;
+        transition: transform 0.15s, background 0.15s;
+        display: inline-flex;
+        align-items: center;
+        gap: 3px;
+        color: white;
+        line-height: 1.4;
+    }
+    .reaction-chip:hover { background: rgba(255,255,255,0.18); transform: scale(1.12); }
+    .reaction-chip.my-reaction { background: rgba(59,130,246,0.28); border-color: var(--accent); }
+    .reaction-chip span { font-size: 0.73rem; opacity: 0.9; }
+
+    /* ── Dropdown Submenu ────────────────────────────────────────── */
+    .dropdown-submenu {
+        position: relative;
+    }
+    .dropdown-submenu > .dropdown-menu {
+        top: 0;
+        display: none;
+        border: 1px solid rgba(255,255,255,0.15);
+        background-color: #1e293b;
+        padding: 5px 0;
+    }
+    .msg-mine .dropdown-submenu > .dropdown-menu {
+        right: 100%;
+        left: auto;
+        margin-right: 0.125rem;
+    }
+    .msg-other .dropdown-submenu > .dropdown-menu {
+        left: 100%;
+        right: auto;
+        margin-left: 0.125rem;
+    }
+    .dropdown-submenu:hover > .dropdown-menu {
+        display: block;
+    }
+    .dropdown-submenu > .dropdown-toggle::after {
+        display: inline-block;
+        margin-left: auto;
+        margin-right: 0.255em;
+        vertical-align: 0.255em;
+        content: "";
+    }
+    .msg-mine .dropdown-submenu > .dropdown-toggle::after {
+        border-top: 0.3em solid transparent;
+        border-left: 0;
+        border-bottom: 0.3em solid transparent;
+        border-right: 0.3em solid;
+    }
+    .msg-other .dropdown-submenu > .dropdown-toggle::after {
+        border-top: 0.3em solid transparent;
+        border-right: 0;
+        border-bottom: 0.3em solid transparent;
+        border-left: 0.3em solid;
+    }
+
+    /* ── Emoji Picker for Input ─────────────────────────────────── */
+    .emoji-picker-container {
+        position: absolute;
+        bottom: 80px;
+        left: 25px;
+        width: 320px;
+        height: 320px;
+        background: rgba(30, 41, 59, 0.85);
+        backdrop-filter: blur(20px);
+        border: 1px solid rgba(255, 255, 255, 0.15);
+        border-radius: 16px;
+        box-shadow: 0 12px 40px rgba(0, 0, 0, 0.6);
+        z-index: 1000;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+        animation: emojiFadeIn 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    @keyframes emojiFadeIn {
+        from {
+            opacity: 0;
+            transform: translateY(12px) scale(0.95);
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0) scale(1);
+        }
+    }
+    .emoji-picker-header {
+        display: flex;
+        justify-content: space-around;
+        background: rgba(15, 23, 42, 0.5);
+        border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+        padding: 8px;
+        flex-shrink: 0;
+    }
+    .emoji-tab-btn {
+        background: none;
+        border: none;
+        font-size: 1.25rem;
+        padding: 6px 12px;
+        border-radius: 8px;
+        cursor: pointer;
+        transition: background 0.2s, transform 0.15s;
+    }
+    .emoji-tab-btn:hover {
+        background: rgba(255, 255, 255, 0.15);
+        transform: scale(1.15);
+    }
+    .emoji-tab-btn.active {
+        background: var(--accent);
+        box-shadow: 0 0 10px rgba(59, 130, 246, 0.5);
+    }
+    .emoji-picker-content {
+        flex-grow: 1;
+        overflow-y: auto;
+        padding: 12px;
+    }
+    .emoji-grid {
+        display: grid;
+        grid-template-columns: repeat(7, 1fr);
+        gap: 6px;
+    }
+    .emoji-item {
+        background: none;
+        border: none;
+        font-size: 1.5rem;
+        padding: 4px;
+        cursor: pointer;
+        border-radius: 8px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: transform 0.15s cubic-bezier(0.175, 0.885, 0.32, 1.275), background 0.15s;
+    }
+    .emoji-item:hover {
+        background: rgba(255, 255, 255, 0.18);
+        transform: scale(1.3);
+    }
+
+    /* ── Highlight flash when jumping to quoted message ───────────── */
+    @keyframes flashHighlight {
+        0%   { outline: 3px solid var(--accent); background: rgba(59,130,246,0.2); border-radius: 12px; }
+        100% { outline: 3px solid transparent; background: transparent; border-radius: 12px; }
+    }
+    .highlight-flash { animation: flashHighlight 1.8s ease-out forwards; }
+
+    @media (max-width: 991.98px) {
+        .sidebar {
+            width: 100% !important;
+            max-width: 100% !important;
+            display: flex !important;
+        }
+        .main-chat {
+            display: none !important;
+            position: absolute !important;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            width: 100% !important;
+            height: 100% !important;
+            z-index: 999 !important;
+            background-color: var(--bg-chat);
+        }
+        
+        .chat-layout.active-chat .sidebar {
+            display: none !important;
+        }
+        .chat-layout.active-chat .main-chat {
+            display: flex !important;
+        }
+        
+        #back-to-sidebar-btn {
+            display: inline-flex !important;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .message-bubble {
+            max-width: 85% !important;
+        }
+        
+        .msg-menu-btn {
+            opacity: 0.75 !important;
+        }
+        
+        .chat-footer {
+            padding: 10px !important;
+            gap: 8px !important;
+        }
+        .chat-input {
+            padding: 10px 15px !important;
+            font-size: 0.95rem !important;
+        }
+        .action-btn {
+            padding: 5px !important;
+            font-size: 1.3rem !important;
+        }
+        .send-btn {
+            width: 40px !important;
+            height: 40px !important;
+        }
+        
+        #selection-bar {
+            flex-direction: column !important;
+            gap: 10px !important;
+            padding: 10px !important;
+        }
+        #selection-bar .d-flex {
+            width: 100% !important;
+            justify-content: space-around !important;
+        }
+        #selection-bar button {
+            font-size: 0.85rem !important;
+            padding: 6px 10px !important;
+        }
+    }
+</style>
+
+<div class="chat-layout" role="application">
+    
+    <!-- Left Sidebar -->
+    <aside class="sidebar" aria-label="Sidebar Navigation">
+        <div class="sidebar-header">
+            <h2 style="margin:0; font-size: 1.5rem; font-weight: 700; color: white;" aria-label="Falcon Chat Application">Falcon<span style="color:var(--accent);" aria-hidden="true">Chat</span></h2>
+            <div style="display:flex; align-items:center; gap: 15px;">
+                <span id="my-username" style="font-weight: 600;" aria-label="Your Username"></span>
+                <button id="logout-btn" class="action-btn" title="Logout" aria-label="Log out from application">🚪</button>
+            </div>
+        </div>
+        
+        <div class="search-bar" role="search">
+            <input type="text" id="user-search-input" class="search-input" placeholder="Search users..." aria-label="Search users and rooms">
+        </div>
+        
+        <div style="padding: 0 15px 10px 15px;">
+            <button class="btn btn-sm btn-primary w-100" id="btn-create-group-modal" style="border-radius: 20px;" type="button">
+                <i class="bi bi-plus-circle me-1"></i> Create Group (إنشاء مجموعة)
+            </button>
+        </div>
+        
+        <div class="user-list" role="navigation" aria-label="Rooms and Users List">
+            <div style="font-size: 0.8rem; text-transform: uppercase; color: var(--text-secondary); margin: 10px 15px;" aria-hidden="true">Rooms</div>
+            <div id="rooms-list" role="list">
+                <div class="user-item active" data-target="All" role="listitem" onclick="selectUser('All', this)">
+                    <button class="user-chat-btn" aria-label="Broadcast Room. Status: Online" style="pointer-events: none;">
+                        <div class="status-dot online" aria-hidden="true"></div>
+                        <div style="flex-grow: 1; font-weight: 600;">📢 Broadcast Room</div>
+                    </button>
+                </div>
+            </div>
+            
+            <div style="font-size: 0.8rem; text-transform: uppercase; color: var(--text-secondary); margin: 20px 15px 10px;" aria-hidden="true">Direct Messages</div>
+            <div id="users-list" role="list">
+                <!-- Users injected here via JS -->
+            </div>
+        </div>
+    </aside>
+    
+    <!-- Main Chat -->
+    <main class="main-chat" aria-label="Main Chat Area">
+        
+        <header class="chat-header">
+            <div style="display: flex; align-items: center;">
+                <button id="back-to-sidebar-btn" class="action-btn" style="margin-right: 15px; padding: 5px; font-size: 1.25rem; display: none;" aria-label="Back to contacts list">⬅️</button>
+                <h3 id="current-chat-title" style="margin: 0; color: white; font-weight: 600; outline: none;" aria-live="polite" tabindex="-1">📢 Broadcast Room</h3>
+            </div>
+            <div style="display: flex; gap: 10px; align-items: center;" id="header-actions">
+                <button id="group-call-btn" class="send-btn" style="background-color: #22c55e; display: none;" title="Group Call" aria-label="Start Group Voice Call">📞</button>
+                <button id="voice-call-btn" class="send-btn" style="background-color: #22c55e; display: none;" title="Voice Call" aria-label="Start Voice Call">📞</button>
+                <button id="leave-group-btn" class="btn btn-sm btn-danger" style="display: none;"><i class="bi bi-box-arrow-right"></i> Leave Group</button>
+            </div>
+        </header>
+
+        <!-- Group Management Panel (visible to owner only) -->
+        <div id="group-admin-panel" class="bg-dark text-white p-3 border-bottom border-secondary" style="display: none;">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+                <h6 class="m-0 text-info"><i class="bi bi-gear-fill me-1"></i> Group Admin (إدارة المجموعة)</h6>
+                <div>
+                    <button class="btn btn-xs btn-danger" id="btn-delete-group" style="padding: 2px 6px; font-size: 0.8rem;"><i class="bi bi-trash"></i> Delete Group</button>
+                </div>
+            </div>
+            <div class="row g-2">
+                <div class="col-md-4 d-flex flex-column justify-content-end">
+                    <label class="form-label small text-secondary mb-1">Invite Members (دعوة أعضاء)</label>
+                    <button class="btn btn-sm btn-primary w-100 py-2" id="btn-open-invite-modal" style="border-radius: 6px;" type="button">
+                        <i class="bi bi-person-plus-fill me-1"></i> Choose Users (اختيار الأعضاء)
+                    </button>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label small text-secondary m-0">Join Requests (طلبات الانضمام)</label>
+                    <div id="group-requests-list" class="list-group list-group-flush border border-secondary rounded" style="max-height: 80px; overflow-y: auto; background: #0f172a;">
+                        <div class="small text-muted p-1">No requests</div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label small text-secondary m-0">Members (الأعضاء)</label>
+                    <div id="group-members-list" class="list-group list-group-flush border border-secondary rounded" style="max-height: 80px; overflow-y: auto; background: #0f172a;">
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Non-Member Group Screen -->
+        <div id="group-non-member-screen" class="flex-grow-1 d-none" style="display:none; flex-direction:column; align-items:center; justify-content:center; padding: 40px; text-align:center; background-color: var(--bg-chat);">
+            <div style="font-size: 4rem; margin-bottom: 20px;">🔒</div>
+            <h3 id="non-member-group-title" style="color: white; font-weight: bold; margin-bottom: 10px;">Group Name</h3>
+            <p class="text-secondary mb-4" id="non-member-group-status-text">You are not a member of this group. You must be invited or submit a join request to participate.</p>
+            <div id="non-member-actions-container">
+            </div>
+        </div>
+
+        <!-- Messages Area -->
+        <div id="messages-container" class="messages-area" role="log" aria-live="polite" aria-label="Chat messages history">
+            <!-- Messages injected here -->
+        </div>
+        
+        <!-- Selection Mode floating bar -->
+        <div id="selection-bar" style="display: none; align-items: center; justify-content: space-between; gap: 15px; padding: 15px 25px; border-top: 1px solid var(--border-color); background: rgba(30, 41, 59, 0.95); backdrop-filter: blur(15px); width: 100%;">
+            <div class="d-flex align-items-center gap-3">
+                <button class="btn btn-sm btn-outline-light" onclick="selectAllMessages()" id="btn-select-all" type="button">
+                    <i class="bi bi-check-all"></i> Select All (تحديد الكل)
+                </button>
+                <button class="btn btn-sm btn-outline-light" onclick="deselectAllMessages()" id="btn-deselect-all" type="button" style="display: none;">
+                    <i class="bi bi-x-circle"></i> Deselect All (إلغاء تحديد الكل)
+                </button>
+                <span id="selection-count" class="badge bg-primary fs-6">0 selected</span>
+            </div>
+            <div class="d-flex align-items-center gap-2">
+                <button class="btn btn-sm btn-info text-white" onclick="copySelectedMessages()" id="btn-copy-selected" type="button">
+                    <i class="bi bi-clipboard"></i> Copy
+                </button>
+                <button class="btn btn-sm btn-success" onclick="openForwardModalForSelected()" id="btn-forward-selected" type="button">
+                    <i class="bi bi-share"></i> Forward
+                </button>
+                <button class="btn btn-sm btn-danger" onclick="deleteSelectedMessages()" id="btn-delete-selected" type="button">
+                    <i class="bi bi-trash"></i> Delete
+                </button>
+                <button class="btn btn-sm btn-secondary" onclick="disableSelectionMode()" type="button">
+                    Cancel
+                </button>
+            </div>
+        </div>
+
+        <!-- Create Group Screen (appears like the calls screen above footer) -->
+        <div id="create-group-screen" tabindex="-1" role="region" aria-label="Create Group Screen" class="d-none" style="display:none; flex-direction:column; align-items:center; justify-content:center; padding: 20px; background: #1e293b; border-top: 2px solid #3b82f6; border-bottom: 2px solid #3b82f6; width: 100%;">
+            <h2 id="create-group-title" aria-live="assertive" style="color:white; margin-bottom:1.2rem; font-weight:bold; font-size: 1.4rem; outline: none;">👥 Create New Group (إنشاء مجموعة جديدة)</h2>
+            <div style="width: 100%; max-width: 450px; display: flex; flex-direction: column; gap: 12px;" role="form" aria-labelledby="create-group-title">
+                <div>
+                    <label for="create-group-name" class="form-label text-secondary small mb-1" style="font-weight: 500;">Group Name (اسم المجموعة)</label>
+                    <input type="text" id="create-group-name" class="form-control bg-dark text-white border-secondary" placeholder="Enter group name..." required aria-required="true" aria-describedby="create-group-name-help">
+                    <div id="create-group-name-help" class="form-text text-muted small">Choose a unique name for your group.</div>
+                </div>
+                <div>
+                    <label for="create-group-desc" class="form-label text-secondary small mb-1" style="font-weight: 500;">Group Description (وصف المجموعة)</label>
+                    <textarea id="create-group-desc" class="form-control bg-dark text-white border-secondary" placeholder="Enter group description..." rows="2" aria-describedby="create-group-desc-help"></textarea>
+                    <div id="create-group-desc-help" class="form-text text-muted small">Briefly describe the purpose of this group (optional).</div>
+                </div>
+                <div>
+                    <label class="form-label text-secondary small mb-1" style="font-weight: 500;">Select Members (تحديد الأعضاء)</label>
+                    <div id="create-group-users-list" class="list-group border border-secondary rounded" style="max-height: 150px; overflow-y: auto; background: #0f172a; padding: 5px;" role="group" aria-label="Select group members list">
+                        <!-- Users dynamically injected here with checkboxes -->
+                    </div>
+                </div>
+                <div style="display:flex; gap:1.5rem; justify-content:center; margin-top: 10px;">
+                    <button class="btn btn-secondary px-4" id="btn-cancel-create-group" style="border-radius: 20px;" type="button" aria-label="Cancel group creation">Cancel (إلغاء)</button>
+                    <button class="btn btn-primary px-4" id="btn-submit-create-group" style="border-radius: 20px;" type="button" aria-label="Create group and save">Create Group (إنشاء)</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Reply Preview Bar (shown when user clicks Reply on a message) -->
+        <div id="reply-preview-bar" class="reply-preview-bar" style="display:none;" role="region" aria-label="Replying to message">
+            <div class="reply-preview-content">
+                <strong id="reply-preview-sender"></strong>
+                <span id="reply-preview-text"></span>
+            </div>
+            <button class="reply-cancel-btn" onclick="window.cancelReply()" title="Cancel Reply" aria-label="Cancel reply">✕</button>
+        </div>
+
+        <footer class="chat-footer" role="form" aria-label="Message Input Area">
+            <button id="attach-btn" class="action-btn" aria-label="Attach File">📎</button>
+            <input type="file" id="file-input" style="display: none;" aria-label="File Selection">
+            
+            <button id="emoji-btn" class="action-btn" title="Insert Emoji" aria-label="Insert Emoji" type="button">😊</button>
+            
+            <input type="text" id="message-input" class="chat-input" placeholder="Type a message..." autocomplete="off" aria-label="Type your text message here">
+            
+            <button id="voice-msg-btn" class="action-btn" title="Hold to record voice" aria-label="Record Voice Message. Click to start, click again to stop and send" type="button">🎙️</button>
+            
+            <button id="send-btn" class="send-btn" aria-label="Send Message" style="display: none;" type="button">📤</button>
+        </footer>
+    </main>
+</div>
+
+<!-- Audio Players -->
+<audio id="msg-sound" src="/static/playing.wav" preload="auto"></audio>
+<audio id="ring-sound" src="/static/audio/rining.m4a" preload="auto" loop></audio>
+<audio id="call-sound" src="/static/audio/calling.m4a" preload="auto" loop></audio>
+<audio id="sound-send" src="/static/audio/send_message.mp3" preload="auto"></audio>
+<audio id="sound-receive-private" src="/static/audio/receaved_message%20.mp3" preload="auto"></audio>
+<audio id="sound-receive-group" src="/static/audio/group_receaved_message.mp3" preload="auto"></audio>
+<audio id="sound-receive-global" src="/static/audio/global_notification.mp3" preload="auto"></audio>
+
+<!-- Emoji Picker Container -->
+<div id="emoji-picker-container" class="emoji-picker-container" style="display: none;">
+    <div class="emoji-picker-header">
+        <button class="emoji-tab-btn active" data-category="smileys" type="button">😀</button>
+        <button class="emoji-tab-btn" data-category="gestures" type="button">👍</button>
+        <button class="emoji-tab-btn" data-category="symbols" type="button">❤️</button>
+        <button class="emoji-tab-btn" data-category="food" type="button">🍔</button>
+    </div>
+    <div class="emoji-picker-content">
+        <div class="emoji-category emoji-grid" id="cat-smileys">
+            <button class="emoji-item" type="button">😀</button>
+            <button class="emoji-item" type="button">😃</button>
+            <button class="emoji-item" type="button">😄</button>
+            <button class="emoji-item" type="button">😁</button>
+            <button class="emoji-item" type="button">😆</button>
+            <button class="emoji-item" type="button">😅</button>
+            <button class="emoji-item" type="button">😂</button>
+            <button class="emoji-item" type="button">🤣</button>
+            <button class="emoji-item" type="button">😊</button>
+            <button class="emoji-item" type="button">😇</button>
+            <button class="emoji-item" type="button">🙂</button>
+            <button class="emoji-item" type="button">🙃</button>
+            <button class="emoji-item" type="button">😉</button>
+            <button class="emoji-item" type="button">😌</button>
+            <button class="emoji-item" type="button">😍</button>
+            <button class="emoji-item" type="button">🥰</button>
+            <button class="emoji-item" type="button">😘</button>
+            <button class="emoji-item" type="button">😗</button>
+            <button class="emoji-item" type="button">😙</button>
+            <button class="emoji-item" type="button">😚</button>
+            <button class="emoji-item" type="button">😋</button>
+            <button class="emoji-item" type="button">😛</button>
+            <button class="emoji-item" type="button">😝</button>
+            <button class="emoji-item" type="button">😜</button>
+            <button class="emoji-item" type="button">🤪</button>
+            <button class="emoji-item" type="button">🤨</button>
+            <button class="emoji-item" type="button">🧐</button>
+            <button class="emoji-item" type="button">🤓</button>
+            <button class="emoji-item" type="button">😎</button>
+            <button class="emoji-item" type="button">🤩</button>
+            <button class="emoji-item" type="button">🥳</button>
+            <button class="emoji-item" type="button">😏</button>
+            <button class="emoji-item" type="button">😒</button>
+            <button class="emoji-item" type="button">😞</button>
+            <button class="emoji-item" type="button">😔</button>
+            <button class="emoji-item" type="button">😟</button>
+            <button class="emoji-item" type="button">😕</button>
+            <button class="emoji-item" type="button">🙁</button>
+            <button class="emoji-item" type="button">☹️</button>
+            <button class="emoji-item" type="button">😣</button>
+            <button class="emoji-item" type="button">😖</button>
+            <button class="emoji-item" type="button">😫</button>
+            <button class="emoji-item" type="button">😩</button>
+            <button class="emoji-item" type="button">🥺</button>
+            <button class="emoji-item" type="button">😢</button>
+            <button class="emoji-item" type="button">😭</button>
+            <button class="emoji-item" type="button">😤</button>
+            <button class="emoji-item" type="button">😠</button>
+            <button class="emoji-item" type="button">😡</button>
+            <button class="emoji-item" type="button">🤬</button>
+            <button class="emoji-item" type="button">🤯</button>
+            <button class="emoji-item" type="button">😳</button>
+            <button class="emoji-item" type="button">🥵</button>
+            <button class="emoji-item" type="button">🥶</button>
+            <button class="emoji-item" type="button">😱</button>
+            <button class="emoji-item" type="button">😨</button>
+            <button class="emoji-item" type="button">😰</button>
+            <button class="emoji-item" type="button">😥</button>
+            <button class="emoji-item" type="button">😓</button>
+            <button class="emoji-item" type="button">🤗</button>
+            <button class="emoji-item" type="button">🤔</button>
+            <button class="emoji-item" type="button">🤭</button>
+            <button class="emoji-item" type="button">🤫</button>
+            <button class="emoji-item" type="button">🤥</button>
+            <button class="emoji-item" type="button">😶</button>
+            <button class="emoji-item" type="button">😐</button>
+            <button class="emoji-item" type="button">😑</button>
+            <button class="emoji-item" type="button">😬</button>
+            <button class="emoji-item" type="button">🙄</button>
+            <button class="emoji-item" type="button">😯</button>
+            <button class="emoji-item" type="button">😦</button>
+            <button class="emoji-item" type="button">😧</button>
+            <button class="emoji-item" type="button">😮</button>
+            <button class="emoji-item" type="button">😲</button>
+            <button class="emoji-item" type="button">🥱</button>
+            <button class="emoji-item" type="button">😴</button>
+        </div>
+        <div class="emoji-category emoji-grid d-none" id="cat-gestures">
+            <button class="emoji-item" type="button">👋</button>
+            <button class="emoji-item" type="button">🤚</button>
+            <button class="emoji-item" type="button">🖐️</button>
+            <button class="emoji-item" type="button">✋</button>
+            <button class="emoji-item" type="button">🖖</button>
+            <button class="emoji-item" type="button">👌</button>
+            <button class="emoji-item" type="button">🤏</button>
+            <button class="emoji-item" type="button">✌️</button>
+            <button class="emoji-item" type="button">🤞</button>
+            <button class="emoji-item" type="button">🤟</button>
+            <button class="emoji-item" type="button">🤘</button>
+            <button class="emoji-item" type="button">🤙</button>
+            <button class="emoji-item" type="button">👈</button>
+            <button class="emoji-item" type="button">👉</button>
+            <button class="emoji-item" type="button">👆</button>
+            <button class="emoji-item" type="button">🖕</button>
+            <button class="emoji-item" type="button">👇</button>
+            <button class="emoji-item" type="button">☝️</button>
+            <button class="emoji-item" type="button">👍</button>
+            <button class="emoji-item" type="button">👎</button>
+            <button class="emoji-item" type="button">✊</button>
+            <button class="emoji-item" type="button">👊</button>
+            <button class="emoji-item" type="button">🤛</button>
+            <button class="emoji-item" type="button">🤜</button>
+            <button class="emoji-item" type="button">👏</button>
+            <button class="emoji-item" type="button">🙌</button>
+            <button class="emoji-item" type="button">👐</button>
+            <button class="emoji-item" type="button">🤲</button>
+            <button class="emoji-item" type="button">🤝</button>
+            <button class="emoji-item" type="button">🙏</button>
+            <button class="emoji-item" type="button">✍️</button>
+            <button class="emoji-item" type="button">💅</button>
+            <button class="emoji-item" type="button">🤳</button>
+            <button class="emoji-item" type="button">💪</button>
+            <button class="emoji-item" type="button">🦵</button>
+            <button class="emoji-item" type="button">🦶</button>
+            <button class="emoji-item" type="button">👂</button>
+            <button class="emoji-item" type="button">👃</button>
+            <button class="emoji-item" type="button">🧠</button>
+            <button class="emoji-item" type="button">👀</button>
+        </div>
+        <div class="emoji-category emoji-grid d-none" id="cat-symbols">
+            <button class="emoji-item" type="button">❤️</button>
+            <button class="emoji-item" type="button">🧡</button>
+            <button class="emoji-item" type="button">💛</button>
+            <button class="emoji-item" type="button">💚</button>
+            <button class="emoji-item" type="button">💙</button>
+            <button class="emoji-item" type="button">💜</button>
+            <button class="emoji-item" type="button">🖤</button>
+            <button class="emoji-item" type="button">🤍</button>
+            <button class="emoji-item" type="button">🤎</button>
+            <button class="emoji-item" type="button">💔</button>
+            <button class="emoji-item" type="button">❣️</button>
+            <button class="emoji-item" type="button">💕</button>
+            <button class="emoji-item" type="button">💞</button>
+            <button class="emoji-item" type="button">💓</button>
+            <button class="emoji-item" type="button">💗</button>
+            <button class="emoji-item" type="button">💖</button>
+            <button class="emoji-item" type="button">💘</button>
+            <button class="emoji-item" type="button">💝</button>
+            <button class="emoji-item" type="button">🌟</button>
+            <button class="emoji-item" type="button">⭐</button>
+            <button class="emoji-item" type="button">✨</button>
+            <button class="emoji-item" type="button">⚡</button>
+            <button class="emoji-item" type="button">💥</button>
+            <button class="emoji-item" type="button">🔥</button>
+            <button class="emoji-item" type="button">🌈</button>
+            <button class="emoji-item" type="button">☀️</button>
+            <button class="emoji-item" type="button">☁️</button>
+            <button class="emoji-item" type="button">❄️</button>
+            <button class="emoji-item" type="button">🌀</button>
+            <button class="emoji-item" type="button">💤</button>
+            <button class="emoji-item" type="button">💢</button>
+            <button class="emoji-item" type="button">💬</button>
+            <button class="emoji-item" type="button">💯</button>
+            <button class="emoji-item" type="button">🏁</button>
+            <button class="emoji-item" type="button">🎉</button>
+            <button class="emoji-item" type="button">🎈</button>
+            <button class="emoji-item" type="button">🎁</button>
+            <button class="emoji-item" type="button">🎫</button>
+            <button class="emoji-item" type="button">🏆</button>
+            <button class="emoji-item" type="button">👑</button>
+        </div>
+        <div class="emoji-category emoji-grid d-none" id="cat-food">
+            <button class="emoji-item" type="button">🍏</button>
+            <button class="emoji-item" type="button">🍎</button>
+            <button class="emoji-item" type="button">🍐</button>
+            <button class="emoji-item" type="button">🍊</button>
+            <button class="emoji-item" type="button">🍋</button>
+            <button class="emoji-item" type="button">🍌</button>
+            <button class="emoji-item" type="button">🍉</button>
+            <button class="emoji-item" type="button">🍇</button>
+            <button class="emoji-item" type="button">🍓</button>
+            <button class="emoji-item" type="button">🍒</button>
+            <button class="emoji-item" type="button">🍑</button>
+            <button class="emoji-item" type="button">🍍</button>
+            <button class="emoji-item" type="button">🥥</button>
+            <button class="emoji-item" type="button">🥝</button>
+            <button class="emoji-item" type="button">🥑</button>
+            <button class="emoji-item" type="button">🥦</button>
+            <button class="emoji-item" type="button">🌽</button>
+            <button class="emoji-item" type="button">🥐</button>
+            <button class="emoji-item" type="button">🍞</button>
+            <button class="emoji-item" type="button">🧀</button>
+            <button class="emoji-item" type="button">🥚</button>
+            <button class="emoji-item" type="button">🍳</button>
+            <button class="emoji-item" type="button">🥞</button>
+            <button class="emoji-item" type="button">🥓</button>
+            <button class="emoji-item" type="button">🥩</button>
+            <button class="emoji-item" type="button">🌭</button>
+            <button class="emoji-item" type="button">🍔</button>
+            <button class="emoji-item" type="button">🍟</button>
+            <button class="emoji-item" type="button">🍕</button>
+            <button class="emoji-item" type="button">🥪</button>
+            <button class="emoji-item" type="button">🥗</button>
+            <button class="emoji-item" type="button">🍿</button>
+            <button class="emoji-item" type="button">🍣</button>
+            <button class="emoji-item" type="button">🍰</button>
+            <button class="emoji-item" type="button">🎂</button>
+            <button class="emoji-item" type="button">🧁</button>
+            <button class="emoji-item" type="button">🍫</button>
+            <button class="emoji-item" type="button">🍬</button>
+            <button class="emoji-item" type="button">🍭</button>
+            <button class="emoji-item" type="button">🍯</button>
+            <button class="emoji-item" type="button">☕</button>
+            <button class="emoji-item" type="button">🍵</button>
+            <button class="emoji-item" type="button">🥤</button>
+            <button class="emoji-item" type="button">🍺</button>
+            <button class="emoji-item" type="button">🍻</button>
+            <button class="emoji-item" type="button">🥂</button>
+            <button class="emoji-item" type="button">🍷</button>
+            <button class="emoji-item" type="button">🥃</button>
+        </div>
+    </div>
+</div>
+
+
+<!-- Forward Message Modal -->
+<div class="modal fade" id="forwardModal" tabindex="-1" aria-labelledby="forwardModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content bg-dark text-white shadow-lg" style="border: 1px solid var(--border-color); border-radius: 12px;">
+            <div class="modal-header" style="border-bottom: 1px solid var(--border-color); background-color: #1e293b;">
+                <h5 class="modal-title" id="forwardModalLabel"><i class="bi bi-share me-2 text-info"></i>Forward Message</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body" style="max-height: 400px; overflow-y: auto; background-color: #0f172a;">
+                <p class="text-secondary small">Choose a chat to forward the message(s) to:</p>
+                <div id="forward-targets-list" class="list-group list-group-flush">
+                    <!-- Loaded dynamically in app.js -->
+                </div>
+            </div>
+            <div class="modal-footer" style="border-top: 1px solid var(--border-color); background-color: #1e293b;">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Delete Confirmation Modal -->
+<div class="modal fade" id="deleteConfirmModal" tabindex="-1" aria-labelledby="deleteConfirmModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content bg-dark text-white shadow-lg" style="border: 1px solid var(--border-color); border-radius: 12px;">
+            <div class="modal-header" style="border-bottom: 1px solid var(--border-color); background-color: #1e293b;">
+                <h5 class="modal-title" id="deleteConfirmModalLabel"><i class="bi bi-trash me-2 text-danger"></i>Delete Message</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body" style="background-color: #0f172a;">
+                <p id="delete-confirm-text">How do you want to delete this message?</p>
+            </div>
+            <div class="modal-footer" style="border-top: 1px solid var(--border-color); background-color: #1e293b;">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-warning" id="btn-delete-me-only">Delete for Me (حذف عندي بس)</button>
+                <button type="button" class="btn btn-danger" id="btn-delete-everyone">Delete for Everyone (عند الجميع)</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Group Invitation Modal -->
+<div class="modal fade" id="groupInviteModal" tabindex="-1" aria-labelledby="groupInviteModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content bg-dark text-white shadow-lg" style="border: 1px solid var(--border-color); border-radius: 12px;">
+            <div class="modal-header" style="border-bottom: 1px solid var(--border-color); background-color: #1e293b;">
+                <h5 class="modal-title" id="groupInviteModalLabel"><i class="bi bi-envelope-open-fill me-2 text-info"></i>Group Invitation (دعوة لمجموعة)</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body" style="background-color: #0f172a;">
+                <p id="group-invite-modal-text" style="font-size: 1.1rem; line-height: 1.5;"></p>
+            </div>
+            <div class="modal-footer" style="border-top: 1px solid var(--border-color); background-color: #1e293b;">
+                <button type="button" class="btn btn-danger px-4" id="btn-decline-invite" style="border-radius: 20px;">Decline (رفض)</button>
+                <button type="button" class="btn btn-success px-4" id="btn-accept-invite" style="border-radius: 20px;">Accept Invite (قبول الدعوة)</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Invite Members Modal -->
+<div class="modal fade" id="groupInviteMembersModal" tabindex="-1" aria-labelledby="groupInviteMembersModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content bg-dark text-white shadow-lg" style="border: 1px solid var(--border-color); border-radius: 12px;">
+            <div class="modal-header" style="border-bottom: 1px solid var(--border-color); background-color: #1e293b;">
+                <h5 class="modal-title" id="groupInviteMembersModalLabel"><i class="bi bi-person-plus-fill me-2 text-info"></i>Invite Members (دعوة أعضاء)</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body" style="max-height: 400px; overflow-y: auto; background-color: #0f172a;">
+                <p class="text-secondary small mb-3">Select users to invite to <span id="invite-group-modal-name" class="fw-bold text-white"></span>:</p>
+                <div id="invite-members-modal-list" class="list-group">
+                    <!-- Checkbox list of users injected here -->
+                </div>
+            </div>
+            <div class="modal-footer" style="border-top: 1px solid var(--border-color); background-color: #1e293b;">
+                <button type="button" class="btn btn-secondary px-4" data-bs-dismiss="modal" style="border-radius: 20px;">Cancel (إلغاء)</button>
+                <button type="button" class="btn btn-primary px-4" id="btn-submit-invites" style="border-radius: 20px;">Send Invites (إرسال الدعوات)</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- External Scripts with v=35 to strictly break cache -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.js"></script>
+<script src="/static/js/socket.js?v=35"></script>
+<script src="/static/js/webrtc.js?v=35"></script>
+<script src="/static/js/app.js?v=35"></script>
+{% endblock %}
