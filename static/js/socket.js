@@ -2,6 +2,34 @@ const socket = io();
 let myUsername = '';
 let currentTarget = 'All';
 
+function statusPriority(status) {
+    if (status === 'Available' || status === 'Online') return 4;
+    if (status === 'Busy') return 3;
+    if (status === 'Away') return 2;
+    return 1;
+}
+
+function statusDotClass(status) {
+    if (status === 'Available' || status === 'Online') return 'online';
+    if (status === 'Busy') return 'busy';
+    if (status === 'Away') return 'away';
+    return 'offline';
+}
+
+function statusDisplayText(status) {
+    if (status === 'Available' || status === 'Online') return 'Online';
+    if (status === 'Busy') return 'Busy';
+    if (status === 'Away') return 'Away';
+    return 'Offline';
+}
+
+function statusDisplayColor(status) {
+    if (status === 'Available' || status === 'Online') return '#22c55e';
+    if (status === 'Busy') return '#f97316';
+    if (status === 'Away') return '#eab308';
+    return '#64748b';
+}
+
 function formatLastSeenRelative(isoStr) {
     if(!isoStr) return 'Never';
     try {
@@ -13,34 +41,62 @@ function formatLastSeenRelative(isoStr) {
         if(isNaN(date.getTime())) return 'Never';
         
         const now = new Date();
+        const diffMs = now.getTime() - date.getTime();
+        const diffSec = Math.floor(diffMs / 1000);
         
         const dateZero = new Date(date.getFullYear(), date.getMonth(), date.getDate());
         const nowZero = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-        const diffTime = nowZero.getTime() - dateZero.getTime();
-        const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+        const diffDays = Math.floor((nowZero.getTime() - dateZero.getTime()) / (1000 * 60 * 60 * 24));
         
-        const timeStr = date.toLocaleTimeString(undefined, {
-            hour: '2-digit',
-            minute: '2-digit'
-        });
-        
-        if (diffDays <= 0) {
-            return `Today at ${timeStr}`;
-        } else if (diffDays === 1) {
-            return `Yesterday at ${timeStr}`;
-        } else if (diffDays < 7) {
-            const dayName = date.toLocaleDateString(undefined, { weekday: 'long' });
-            return `${dayName} at ${timeStr}`;
-        } else {
-            const dateStr = date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
-            return `${dateStr} at ${timeStr}`;
+        if (diffDays === 0) {
+            if (diffSec < 60) return 'Just now';
+            const diffMin = Math.floor(diffSec / 60);
+            if (diffMin < 60) return `${diffMin} minute${diffMin !== 1 ? 's' : ''} ago`;
+            const diffHr = Math.floor(diffMin / 60);
+            return `${diffHr} hour${diffHr !== 1 ? 's' : ''} ago`;
         }
+        
+        const timeStr = date.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+        
+        if (diffDays === 1) {
+            return `Yesterday at ${timeStr}`;
+        }
+        if (diffDays < 7) {
+            return `${date.toLocaleDateString(undefined, { weekday: 'long' })} at ${timeStr}`;
+        }
+        return `${date.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })} at ${timeStr}`;
     } catch(e) {
         return 'Never';
     }
 }
 
+function lastSeenTooltip(isoStr) {
+    if(!isoStr) return '';
+    try {
+        let cleanStr = isoStr;
+        if (typeof cleanStr === 'string' && !cleanStr.endsWith('Z') && !cleanStr.includes('+') && !cleanStr.includes('-')) {
+            cleanStr += 'Z';
+        }
+        const date = new Date(cleanStr);
+        if(isNaN(date.getTime())) return '';
+        return date.toLocaleString(undefined, {
+            year: 'numeric', month: 'short', day: 'numeric',
+            hour: '2-digit', minute: '2-digit'
+        });
+    } catch(e) {
+        return '';
+    }
+}
+
 window.selectUser = function(targetName, element) {
+    // Stop typing for previous conversation
+    stopTypingForCurrent();
+    // Hide any incoming typing indicator
+    const typingEl = document.getElementById('typing-indicator');
+    if (typingEl) { typingEl.classList.add('hidden'); typingEl.style.display = ''; }
+    if (_typingTimeout) clearTimeout(_typingTimeout);
+    _shownTypingUser = null;
+
     document.querySelectorAll('.user-item').forEach(el => el.classList.remove('active'));
     if(element) element.classList.add('active');
     
@@ -88,11 +144,34 @@ socket.on('connect', async () => {
     const res = await fetch('/api/user_info');
     const data = await res.json();
     if(data.success) {
-        myUsername = data.username;
+        myUsername = data.data.username;
         window.myUsername = myUsername;
         const myUserEl = document.getElementById('my-username');
         if(myUserEl) myUserEl.innerText = myUsername;
         socket.emit('register', { username: myUsername });
+
+        // Start client-side heartbeat
+        if (window._heartbeatInterval) clearInterval(window._heartbeatInterval);
+        window._heartbeatInterval = setInterval(() => {
+            socket.emit('heartbeat');
+        }, 60000);
+
+        // Restore sidebar header status dot & selector from own user data
+        const checkSelf = () => {
+            if (window.allUsersList) {
+                const self = window.allUsersList.find(u => u.name === myUsername);
+                if (self) {
+                    const dot = document.getElementById('my-status-dot');
+                    if (dot) dot.className = 'my-status-dot ' + statusDotClass(self.status);
+                    const sel = document.getElementById('status-selector');
+                    if (sel) sel.value = self.status;
+                }
+                return;
+            }
+            setTimeout(checkSelf, 200);
+        };
+        checkSelf();
+
         if (typeof window.loadHistory === 'function') {
             window.loadHistory();
         }
@@ -102,100 +181,328 @@ socket.on('connect', async () => {
     }
 });
 
+// Status selector change handler
+document.addEventListener('change', (e) => {
+    if (e.target && e.target.id === 'status-selector') {
+        const newStatus = e.target.value;
+        socket.emit('status_update', { status: newStatus });
+        // Optimistic UI update
+        const dot = document.getElementById('my-status-dot');
+        if (dot) dot.className = 'my-status-dot ' + statusDotClass(newStatus);
+    }
+});
+
+// Typing indicator — input handler (delegated)
+document.addEventListener('input', (e) => {
+    if (e.target && e.target.id === 'message-input') {
+        handleInputTyping();
+    }
+});
+
+// Stop typing on send button click
+document.addEventListener('click', (e) => {
+    const btn = e.target.closest('#send-btn');
+    if (btn) {
+        stopTypingForCurrent();
+    }
+});
+
+// Stop typing on Enter key in message input
+document.addEventListener('keydown', (e) => {
+    if (e.target && e.target.id === 'message-input' && e.key === 'Enter' && !e.shiftKey) {
+        // Small delay to let the send handler fire first
+        setTimeout(stopTypingForCurrent, 50);
+    }
+});
+
 socket.on('user_list', (data) => {
     window.allUsersList = data.users || [];
     
-    // Sort users: Online first, then by last_message_time descending, then alphabetical fallback
+    // Sort users: Available > Busy > Away > Offline, then unread first, then alphabetical
     if (data.users && data.users.length > 0) {
         data.users.sort((a, b) => {
-            const aOnline = a.status === 'Available' || a.status === 'Online' ? 1 : 0;
-            const bOnline = b.status === 'Available' || b.status === 'Online' ? 1 : 0;
-            
-            // 1. Online status (descending)
-            if (aOnline !== bOnline) {
-                return bOnline - aOnline;
-            }
-            
-            // 2. Last message time (descending)
-            const aTime = a.last_message_time || 0;
-            const bTime = b.last_message_time || 0;
-            if (aTime !== bTime) {
-                return bTime - aTime;
-            }
-            
-            // 3. Alphabetical fallback
+            const pa = statusPriority(a.status);
+            const pb = statusPriority(b.status);
+            if (pa !== pb) return pb - pa;
+            // Within same status: unread conversations first
+            const aUnread = (a.unread_count || 0) > 0 ? 0 : 1;
+            const bUnread = (b.unread_count || 0) > 0 ? 0 : 1;
+            if (aUnread !== bUnread) return aUnread - bUnread;
+            // Then alphabetical
             return a.name.localeCompare(b.name);
         });
     }
     
-    const ul = document.getElementById('users-list');
-    if(!ul) return;
-    ul.innerHTML = '';
-    
-    data.users.forEach(u => {
-        if(u.name === myUsername) return;
-        
-        const div = document.createElement('div');
-        div.className = `user-item ${currentTarget === u.name ? 'active' : ''}`;
-        div.setAttribute('role', 'listitem');
-        div.setAttribute('data-target', u.name);
+    renderUserList();
 
-        
-        const statusText = u.status === 'Available' ? 'Online' : `Offline. Last seen: ${formatLastSeenRelative(u.last_seen)}`;
-        const unreadText = u.unread_count > 0 ? `, ${u.unread_count} unread messages` : '';
-        
-        // Left side button: opens chat (pointer events disabled to let click register on parent div)
-        const chatBtn = document.createElement('button');
-        chatBtn.className = 'user-chat-btn';
-        chatBtn.setAttribute('aria-label', `Chat with ${u.name}. Status: ${statusText}${unreadText}`);
-        chatBtn.style.pointerEvents = 'none';
-        
-        let userDetailsHtml = `<div style="font-weight: 600;">${u.name}</div>`;
-        if (u.status !== 'Available') {
-            userDetailsHtml += `<div style="font-size: 0.75rem; color: var(--text-secondary);"><span class="visually-hidden">Status: Offline. </span>Last seen: ${formatLastSeenRelative(u.last_seen)}</div>`;
-        } else {
-            userDetailsHtml += `<div style="font-size: 0.75rem; color: #22c55e;"><span class="visually-hidden">Status: </span>Online</div>`;
-        }
-        
-        let badgeHtml = '';
-        if(u.unread_count > 0) {
-            badgeHtml = `<span class="badge bg-danger rounded-pill" style="margin-right: 8px;">${u.unread_count}<span class="visually-hidden"> unread messages</span></span>`;
-        }
-        
-        chatBtn.innerHTML = `
-            <div class="status-dot ${u.status === 'Available' ? 'online' : 'offline'}" aria-hidden="true"></div>
-            <div style="flex-grow: 1; display: flex; flex-direction: column; text-align: left;">
-                ${userDetailsHtml}
-            </div>
-            ${badgeHtml}
-        `;
-        
-        // Right side: Direct Call Button
-        const callBtn = document.createElement('button');
-        callBtn.className = 'direct-call-btn';
-        callBtn.innerHTML = '📞';
-        callBtn.title = `Call ${u.name}`;
-        callBtn.setAttribute('aria-label', `Call ${u.name}`);
-        callBtn.onclick = (e) => {
-            e.stopPropagation();
-            if(typeof window.startDirectCall === 'function') {
-                window.startDirectCall(u.name);
-            }
-        };
-        
-        div.appendChild(chatBtn);
-        div.appendChild(callBtn);
-        
-        // Make the entire user-item row clickable for touch/mobile devices
-        div.onclick = () => window.selectUser(u.name, div);
-        ul.appendChild(div);
-    });
-    
     // Re-apply search filter if active
     const searchInput = document.getElementById('user-search-input');
     if (searchInput && searchInput.value) {
         searchInput.dispatchEvent(new Event('input'));
     }
+});
+
+function renderUserList() {
+    const ul = document.getElementById('users-list');
+    if(!ul) return;
+    ul.innerHTML = '';
+    
+    const onlineUsers = [];
+    const offlineUsers = [];
+    
+    (window.allUsersList || []).forEach(u => {
+        if(u.name === myUsername) return;
+        const prio = statusPriority(u.status);
+        if (prio > 1) {
+            onlineUsers.push(u);
+        } else {
+            offlineUsers.push(u);
+        }
+    });
+    
+    // Update the self status dot and selector
+    const selfUser = (window.allUsersList || []).find(u => u.name === myUsername);
+    if (selfUser) {
+        const dot = document.getElementById('my-status-dot');
+        if (dot) {
+            dot.className = 'my-status-dot ' + statusDotClass(selfUser.status);
+        }
+        const sel = document.getElementById('status-selector');
+        if (sel && sel.value !== selfUser.status) {
+            sel.value = selfUser.status;
+        }
+    }
+    
+    // Render online users
+    onlineUsers.forEach(u => {
+        const dotCls = statusDotClass(u.status);
+        const dispText = statusDisplayText(u.status);
+        const dispColor = statusDisplayColor(u.status);
+        const isActive = currentTarget === u.name;
+        
+        const html = `
+        <div class="user-item ${isActive ? 'active' : ''}" data-target="${u.name}" role="listitem">
+            <button class="user-chat-btn" aria-label="Chat with ${escapeHtml(u.name)}. Status: ${dispText}" style="pointer-events: none;">
+                <div class="status-dot ${dotCls}" aria-hidden="true"></div>
+                <div style="flex-grow: 1; display: flex; flex-direction: column; text-align: left;">
+                    <div style="font-weight: 600;">${escapeHtml(u.name)}</div>
+                    <div style="font-size: 0.75rem; color: ${dispColor};">${dispText}</div>
+                </div>
+                ${u.unread_count > 0 ? `<span class="badge bg-danger rounded-pill" style="margin-right: 8px;">${u.unread_count}<span class="visually-hidden"> unread messages</span></span>` : ''}
+            </button>
+            <button class="direct-call-btn" title="Call ${escapeHtml(u.name)}" aria-label="Call ${escapeHtml(u.name)}">📞</button>
+        </div>`;
+        
+        const temp = document.createElement('div');
+        temp.innerHTML = html;
+        const div = temp.firstElementChild;
+        
+        const callBtn = div.querySelector('.direct-call-btn');
+        callBtn.onclick = (e) => {
+            e.stopPropagation();
+            if(typeof window.startDirectCall === 'function') window.startDirectCall(u.name);
+        };
+        
+        div.onclick = () => window.selectUser(u.name, div);
+        ul.appendChild(div);
+    });
+    
+    // Render offline users directly in the list
+    offlineUsers.forEach(u => {
+        const isActive = currentTarget === u.name;
+        const lastSeen = formatLastSeenRelative(u.last_seen);
+        const tooltip = lastSeenTooltip(u.last_seen);
+        
+        const html = `
+        <div class="user-item ${isActive ? 'active' : ''}" data-target="${u.name}" role="listitem">
+            <button class="user-chat-btn" aria-label="Chat with ${escapeHtml(u.name)}. Status: Offline. Last seen: ${lastSeen}" style="pointer-events: none;">
+                <div class="status-dot offline" aria-hidden="true"></div>
+                <div style="flex-grow: 1; display: flex; flex-direction: column; text-align: left;">
+                    <div style="font-weight: 600;">${escapeHtml(u.name)}</div>
+                    <div class="last-seen-label"${tooltip ? ` title="${tooltip}"` : ''}>Last seen: ${lastSeen}</div>
+                </div>
+                ${u.unread_count > 0 ? `<span class="badge bg-danger rounded-pill" style="margin-right: 8px;">${u.unread_count}<span class="visually-hidden"> unread messages</span></span>` : ''}
+            </button>
+            <button class="direct-call-btn" title="Call ${escapeHtml(u.name)}" aria-label="Call ${escapeHtml(u.name)}">📞</button>
+        </div>`;
+        
+        const temp = document.createElement('div');
+        temp.innerHTML = html;
+        const div = temp.firstElementChild;
+        
+        const callBtn = div.querySelector('.direct-call-btn');
+        callBtn.onclick = (e) => {
+            e.stopPropagation();
+            if(typeof window.startDirectCall === 'function') window.startDirectCall(u.name);
+        };
+        
+        div.onclick = () => window.selectUser(u.name, div);
+        ul.appendChild(div);
+    });
+}
+
+// ── Typing indicator state ──────────────────────────────────────
+let _typingState = {
+    lastStart: 0,
+    stopTimer: null,
+    currentConv: null,
+};
+
+function getConversationType(conv) {
+    if (conv === 'All' || !conv) return null;
+    if (window.allGroupsList && window.allGroupsList.some(g => g.name === conv)) return 'group';
+    return 'private';
+}
+
+function sendTypingStart(conv, type) {
+    if (!conv || !type) return;
+    socket.emit('typing_start', { to: conv, type: type });
+}
+
+function sendTypingStop(conv, type) {
+    if (!conv || !type) return;
+    socket.emit('typing_stop', { to: conv, type: type });
+    _typingState.currentConv = null;
+}
+
+function handleInputTyping() {
+    const conv = currentTarget;
+    const type = getConversationType(conv);
+    if (!type) return;
+
+    // Throttle: emit typing_start at most every 2s
+    const now = Date.now();
+    if (now - _typingState.lastStart >= 2000) {
+        sendTypingStart(conv, type);
+        _typingState.lastStart = now;
+    }
+
+    // Debounce: emit typing_stop after 1s of no keystrokes
+    if (_typingState.stopTimer) clearTimeout(_typingState.stopTimer);
+    _typingState.currentConv = conv;
+    _typingState.stopTimer = setTimeout(() => {
+        if (_typingState.currentConv === conv) {
+            sendTypingStop(conv, type);
+        }
+    }, 1000);
+}
+
+function stopTypingForCurrent() {
+    const conv = _typingState.currentConv;
+    if (conv) {
+        const type = getConversationType(conv);
+        if (type) sendTypingStop(conv, type);
+    }
+    if (_typingState.stopTimer) {
+        clearTimeout(_typingState.stopTimer);
+        _typingState.stopTimer = null;
+    }
+    _typingState.currentConv = null;
+}
+
+// ── Typing indicator UI ─────────────────────────────────────────
+let _typingTimeout = null;
+let _shownTypingUser = null;
+
+socket.on('user_typing', (data) => {
+    const { username, conversation, type } = data;
+    // Show only if we're viewing this conversation
+    if (type === 'private' && conversation !== currentTarget) return;
+    if (type === 'group' && conversation !== currentTarget) return;
+    if (username === myUsername) return;
+
+    const typingEl = document.getElementById('typing-indicator');
+    const textEl = document.getElementById('typing-text');
+    if (!typingEl || !textEl) return;
+
+    _shownTypingUser = username;
+    let label;
+    if (type === 'group') {
+        label = `${escapeHtml(username)} is typing<span class="typing-dots"></span>`;
+    } else {
+        label = `typing<span class="typing-dots"></span>`;
+    }
+    textEl.innerHTML = label;
+    typingEl.style.display = 'block';
+    typingEl.classList.remove('hidden');
+
+    // Auto-hide after 4s if no refresh
+    if (_typingTimeout) clearTimeout(_typingTimeout);
+    _typingTimeout = setTimeout(() => {
+        typingEl.classList.add('hidden');
+        _shownTypingUser = null;
+    }, 4000);
+});
+
+socket.on('user_typing_stop', (data) => {
+    const { username, conversation, type } = data;
+    if (type === 'private' && conversation !== currentTarget) return;
+    if (type === 'group' && conversation !== currentTarget) return;
+    if (username !== _shownTypingUser) return;
+
+    const typingEl = document.getElementById('typing-indicator');
+    if (!typingEl) return;
+    typingEl.classList.add('hidden');
+    if (_typingTimeout) clearTimeout(_typingTimeout);
+    _shownTypingUser = null;
+});
+
+// Handle incremental presence updates — update single user then re-render
+socket.on('user_update', (data) => {
+    const { username, status, last_seen } = data;
+    if (!window.allUsersList) return;
+    const idx = window.allUsersList.findIndex(u => u.name === username);
+    if (idx === -1) return;
+
+    const prevStatus = window.allUsersList[idx].status;
+    window.allUsersList[idx].status = status;
+    window.allUsersList[idx].last_seen = last_seen;
+
+    // Re-sort if status actually changed (sort priority may differ)
+    if (prevStatus !== status) {
+        window.allUsersList.sort((a, b) => {
+            const pa = statusPriority(a.status);
+            const pb = statusPriority(b.status);
+            if (pa !== pb) return pb - pa;
+            const aUnread = (a.unread_count || 0) > 0 ? 0 : 1;
+            const bUnread = (b.unread_count || 0) > 0 ? 0 : 1;
+            if (aUnread !== bUnread) return aUnread - bUnread;
+            return a.name.localeCompare(b.name);
+        });
+    }
+
+    renderUserList();
+});
+
+socket.on('user_rename', (data) => {
+    const { old_username, new_username } = data;
+    if (!window.allUsersList) return;
+
+    // If it's the current user, update myUsername and sidebar
+    if (old_username === myUsername) {
+        myUsername = new_username;
+        const el = document.getElementById('my-username');
+        if (el) el.textContent = new_username;
+    }
+
+    // Update the name in the user list
+    const idx = window.allUsersList.findIndex(u => u.name === old_username);
+    if (idx !== -1) {
+        window.allUsersList[idx].name = new_username;
+    }
+
+    // Re-sort (name may have changed order within same status group)
+    window.allUsersList.sort((a, b) => {
+        const pa = statusPriority(a.status);
+        const pb = statusPriority(b.status);
+        if (pa !== pb) return pb - pa;
+        const aUnread = (a.unread_count || 0) > 0 ? 0 : 1;
+        const bUnread = (b.unread_count || 0) > 0 ? 0 : 1;
+        if (aUnread !== bUnread) return aUnread - bUnread;
+        return a.name.localeCompare(b.name);
+    });
+
+    renderUserList();
 });
 
 function showBrowserNotification(data) {
@@ -354,7 +661,7 @@ async function loadGroupsList() {
         const res = await fetch('/api/groups');
         const data = await res.json();
         if (data.success) {
-            window.allGroupsList = data.groups || [];
+            window.allGroupsList = (data.data ? data.data.groups : data.groups) || [];
             renderRoomsList();
         }
     } catch(e) {
@@ -412,7 +719,7 @@ function renderRoomsList() {
                 <div style="display: flex; align-items: center; overflow: hidden; flex-grow: 1;">
                     <div class="status-dot ${g.is_member ? 'online' : 'offline'}" aria-hidden="true"></div>
                     <div style="display: flex; flex-direction: column; text-align: left; overflow: hidden;">
-                        <div style="font-weight: 600; color: white; text-overflow: ellipsis; white-space: nowrap; overflow: hidden;">👥 ${g.name}</div>
+                        <div style="font-weight: 600; color: white; text-overflow: ellipsis; white-space: nowrap; overflow: hidden;">👥 ${escapeHtml(g.name)}</div>
                         <div style="font-size: 0.75rem; color: var(--text-secondary);">${statusText}</div>
                     </div>
                 </div>
@@ -435,6 +742,14 @@ function renderRoomsList() {
 window.selectGroup = function(groupName, element) {
     const g = window.allGroupsList.find(item => item.name === groupName);
     if (!g) return;
+
+    // Stop typing for previous conversation
+    stopTypingForCurrent();
+    // Hide any incoming typing indicator
+    const typingEl = document.getElementById('typing-indicator');
+    if (typingEl) { typingEl.classList.add('hidden'); typingEl.style.display = ''; }
+    if (_typingTimeout) clearTimeout(_typingTimeout);
+    _shownTypingUser = null;
     
     document.querySelectorAll('.user-item').forEach(el => el.classList.remove('active'));
     if (element) element.classList.add('active');
@@ -557,7 +872,7 @@ socket.on('group_invite_received', (data) => {
         const inviteModal = bootstrap.Modal.getOrCreateInstance(inviteModalEl);
         const modalTextEl = document.getElementById('group-invite-modal-text');
         if (modalTextEl) {
-            modalTextEl.innerHTML = `<strong>${data.invited_by}</strong> is inviting you to join group <strong>"${data.group_name}"</strong>.<br><br>هل تريد قبول دعوة <strong>${data.invited_by}</strong> للانضمام إلى مجموعة <strong>"${data.group_name}"</strong>؟`;
+            modalTextEl.innerHTML = `<strong>${escapeHtml(data.invited_by)}</strong> is inviting you to join group <strong>"${escapeHtml(data.group_name)}"</strong>.<br><br>هل تريد قبول دعوة <strong>${escapeHtml(data.invited_by)}</strong> للانضمام إلى مجموعة <strong>"${escapeHtml(data.group_name)}"</strong>؟`;
         }
         
         const btnAccept = document.getElementById('btn-accept-invite');

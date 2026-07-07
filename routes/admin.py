@@ -6,6 +6,30 @@ from database.database import db
 from models.models import User, Message, Group, GroupMember, GroupInvite, GroupJoinRequest, SystemBroadcast
 from werkzeug.security import generate_password_hash
 from utils.crypto import decrypt_text
+from utils.security.sanitizers import sanitize_html
+from utils.api import success_response, error_response, ErrorCode
+from utils.security import (
+    rate_limit,
+    admin_key,
+    ADMIN_PAGE_LIMIT,
+    ADMIN_STATS_LIMIT,
+    ADMIN_USER_LIST_LIMIT,
+    ADMIN_USER_ADD_LIMIT,
+    ADMIN_USER_EDIT_LIMIT,
+    ADMIN_USER_BAN_LIMIT,
+    ADMIN_USER_DELETE_LIMIT,
+    ADMIN_GROUP_LIST_LIMIT,
+    ADMIN_GROUP_MEMBERS_LIMIT,
+    ADMIN_GROUP_RENAME_LIMIT,
+    ADMIN_GROUP_KICK_LIMIT,
+    ADMIN_GROUP_DELETE_LIMIT,
+    ADMIN_CHAT_USERS_LIMIT,
+    ADMIN_CHAT_HISTORY_LIMIT,
+    ADMIN_CHAT_DELETE_LIMIT,
+    ADMIN_MEDIA_LIST_LIMIT,
+    ADMIN_MEDIA_DELETE_LIMIT,
+    ADMIN_BROADCAST_LIMIT,
+)
 from sqlalchemy import or_, and_, func
 
 admin_bp = Blueprint('admin', __name__, url_prefix='/admin')
@@ -15,21 +39,24 @@ def check_admin_session():
     # Enforce admin authentication check for all admin routes
     if not session.get('admin_logged_in'):
         if request.path.startswith('/admin/api/'):
-            return jsonify({"success": False, "error": "Unauthorized admin access."}), 401
+            return error_response(ErrorCode.ADMIN_UNAUTHORIZED[0], "Unauthorized admin access.", status_code=401)
         return redirect('/login')
 
 @admin_bp.route('/')
 @admin_bp.route('/dashboard')
+@rate_limit(ADMIN_PAGE_LIMIT, key_func=admin_key)
 def dashboard():
     return render_template('admin/admin_dashboard.html')
 
 @admin_bp.route('/logout')
+@rate_limit(10, key_func=admin_key)
 def logout():
-    session.pop('admin_logged_in', None)
+    session.clear()
     return redirect('/login')
 
 # --- Statistics API ---
 @admin_bp.route('/api/stats', methods=['GET'])
+@rate_limit(ADMIN_STATS_LIMIT, key_func=admin_key)
 def get_stats():
     try:
         db_uri = current_app.config.get('SQLALCHEMY_DATABASE_URI', 'sqlite:///falcon_web.db')
@@ -52,9 +79,7 @@ def get_stats():
         status_counts = db.session.query(User.status, func.count(User.id)).group_by(User.status).all()
         status_dist = {status: count for status, count in status_counts}
         
-        return jsonify({
-            "success": True,
-            "db_path": os.path.abspath(db_path),
+        return success_response({
             "db_size": f"{size_mb:.2f} MB ({size_bytes:,} bytes)",
             "total_users": total_users,
             "total_messages": total_messages,
@@ -64,10 +89,11 @@ def get_stats():
             "status_distribution": status_dist
         })
     except Exception as e:
-        return jsonify({"success": False, "error": str(e)}), 500
+        return error_response(ErrorCode.SERVER_INTERNAL_ERROR[0], str(e), status_code=500)
 
 # --- User Management API ---
 @admin_bp.route('/api/users', methods=['GET'])
+@rate_limit(ADMIN_USER_LIST_LIMIT, key_func=admin_key)
 def list_users():
     try:
         users = User.query.all()
@@ -84,11 +110,12 @@ def list_users():
                 "is_banned": u.is_banned,
                 "sent_count": sent_count
             })
-        return jsonify({"success": True, "users": user_list})
+        return success_response({"users": user_list})
     except Exception as e:
-        return jsonify({"success": False, "error": str(e)}), 500
+        return error_response(ErrorCode.SERVER_INTERNAL_ERROR[0], str(e), status_code=500)
 
 @admin_bp.route('/api/users/add', methods=['POST'])
+@rate_limit(ADMIN_USER_ADD_LIMIT, key_func=admin_key)
 def add_user():
     try:
         data = request.json or {}
@@ -96,23 +123,24 @@ def add_user():
         password = data.get('password', '')
         
         if not username or not password:
-            return jsonify({"success": False, "error": "Username and password are required."}), 400
+            return error_response(ErrorCode.VALIDATION_MISSING_FIELD[0], "Username and password are required.", status_code=400)
             
         # Check if user exists
         existing = User.query.filter(func.lower(User.username) == func.lower(username)).first()
         if existing:
-            return jsonify({"success": False, "error": f"User '{username}' already exists."}), 409
+            return error_response(ErrorCode.AUTH_USERNAME_EXISTS[0], f"User '{username}' already exists.", status_code=409)
             
         u = User(username=username, status="Offline")
         u.set_password(password)
         db.session.add(u)
         db.session.commit()
-        return jsonify({"success": True, "message": f"User '{username}' created successfully."})
+        return success_response({"message": f"User '{username}' created successfully."})
     except Exception as e:
         db.session.rollback()
-        return jsonify({"success": False, "error": str(e)}), 500
+        return error_response(ErrorCode.SERVER_INTERNAL_ERROR[0], str(e), status_code=500)
 
 @admin_bp.route('/api/users/edit/<int:user_id>', methods=['POST'])
+@rate_limit(ADMIN_USER_EDIT_LIMIT, key_func=admin_key)
 def edit_user(user_id):
     try:
         u = User.query.get_or_404(user_id)
@@ -122,7 +150,7 @@ def edit_user(user_id):
         new_password = data.get('password', '')
         
         if not new_username:
-            return jsonify({"success": False, "error": "Username cannot be empty."}), 400
+            return error_response(ErrorCode.VALIDATION_INVALID_USERNAME[0], "Username cannot be empty.", status_code=400)
             
         old_username = u.username
         
@@ -130,7 +158,7 @@ def edit_user(user_id):
         if new_username.lower() != old_username.lower():
             conflict = User.query.filter(func.lower(User.username) == func.lower(new_username)).first()
             if conflict:
-                return jsonify({"success": False, "error": f"Username '{new_username}' already exists."}), 409
+                return error_response(ErrorCode.AUTH_USERNAME_EXISTS[0], f"Username '{new_username}' already exists.", status_code=409)
         
         # Update user
         u.username = new_username
@@ -154,24 +182,26 @@ def edit_user(user_id):
             GroupJoinRequest.query.filter_by(username=old_username).update({GroupJoinRequest.username: new_username})
             
         db.session.commit()
-        return jsonify({"success": True, "message": "User updated successfully."})
+        return success_response({"message": "User updated successfully."})
     except Exception as e:
         db.session.rollback()
-        return jsonify({"success": False, "error": str(e)}), 500
+        return error_response(ErrorCode.SERVER_INTERNAL_ERROR[0], str(e), status_code=500)
 
 @admin_bp.route('/api/users/toggle_ban/<int:user_id>', methods=['POST'])
+@rate_limit(ADMIN_USER_BAN_LIMIT, key_func=admin_key)
 def toggle_ban(user_id):
     try:
         u = User.query.get_or_404(user_id)
         u.is_banned = not u.is_banned
         db.session.commit()
         status_txt = "banned" if u.is_banned else "unbanned"
-        return jsonify({"success": True, "message": f"User {u.username} has been {status_txt}."})
+        return success_response({"message": f"User {u.username} has been {status_txt}."})
     except Exception as e:
         db.session.rollback()
-        return jsonify({"success": False, "error": str(e)}), 500
+        return error_response(ErrorCode.SERVER_INTERNAL_ERROR[0], str(e), status_code=500)
 
 @admin_bp.route('/api/users/delete/<int:user_id>', methods=['POST'])
+@rate_limit(ADMIN_USER_DELETE_LIMIT, key_func=admin_key)
 def delete_user(user_id):
     try:
         u = User.query.get_or_404(user_id)
@@ -195,13 +225,14 @@ def delete_user(user_id):
             db.session.delete(g)
             
         db.session.commit()
-        return jsonify({"success": True, "message": f"User '{username}' and all their data/messages deleted successfully."})
+        return success_response({"message": f"User '{username}' and all their data/messages deleted successfully."})
     except Exception as e:
         db.session.rollback()
-        return jsonify({"success": False, "error": str(e)}), 500
+        return error_response(ErrorCode.SERVER_INTERNAL_ERROR[0], str(e), status_code=500)
 
 # --- Group Management API ---
 @admin_bp.route('/api/groups', methods=['GET'])
+@rate_limit(ADMIN_GROUP_LIST_LIMIT, key_func=admin_key)
 def list_groups():
     try:
         groups = Group.query.all()
@@ -216,11 +247,12 @@ def list_groups():
                 "created_at": g.created_at.strftime("%Y-%m-%d %H:%M:%S") if g.created_at else "N/A",
                 "member_count": member_count
             })
-        return jsonify({"success": True, "groups": group_list})
+        return success_response({"groups": group_list})
     except Exception as e:
-        return jsonify({"success": False, "error": str(e)}), 500
+        return error_response(ErrorCode.SERVER_INTERNAL_ERROR[0], str(e), status_code=500)
 
 @admin_bp.route('/api/groups/<string:group_name>/members', methods=['GET'])
+@rate_limit(ADMIN_GROUP_MEMBERS_LIMIT, key_func=admin_key)
 def list_group_members(group_name):
     try:
         members = GroupMember.query.filter_by(group_name=group_name).all()
@@ -229,11 +261,12 @@ def list_group_members(group_name):
             "username": m.username,
             "joined_at": m.joined_at.strftime("%Y-%m-%d %H:%M:%S") if m.joined_at else "N/A"
         } for m in members]
-        return jsonify({"success": True, "members": mem_list})
+        return success_response({"members": mem_list})
     except Exception as e:
-        return jsonify({"success": False, "error": str(e)}), 500
+        return error_response(ErrorCode.SERVER_INTERNAL_ERROR[0], str(e), status_code=500)
 
 @admin_bp.route('/api/groups/rename', methods=['POST'])
+@rate_limit(ADMIN_GROUP_RENAME_LIMIT, key_func=admin_key)
 def rename_group():
     try:
         data = request.json or {}
@@ -241,15 +274,17 @@ def rename_group():
         new_name = data.get('new_name', '').strip()
         
         if not old_name or not new_name:
-            return jsonify({"success": False, "error": "Old and new group names are required."}), 400
+            return error_response(ErrorCode.VALIDATION_MISSING_FIELD[0], "Old and new group names are required.", status_code=400)
             
-        g = Group.query.filter_by(name=old_name).first_or_404()
+        g = Group.query.filter_by(name=old_name).first()
+        if not g:
+            return error_response(ErrorCode.GROUP_NOT_FOUND[0], f"Group '{old_name}' not found.", status_code=404)
         
         # Check conflict
         if new_name.lower() != old_name.lower():
             conflict = Group.query.filter(func.lower(Group.name) == func.lower(new_name)).first()
             if conflict:
-                return jsonify({"success": False, "error": f"Group name '{new_name}' already exists."}), 409
+                return error_response(ErrorCode.GROUP_NAME_RESERVED[0], f"Group name '{new_name}' already exists.", status_code=409)
                 
         g.name = new_name
         
@@ -260,12 +295,13 @@ def rename_group():
         Message.query.filter_by(recipient=old_name).update({Message.recipient: new_name})
         
         db.session.commit()
-        return jsonify({"success": True, "message": f"Group renamed from '{old_name}' to '{new_name}' successfully."})
+        return success_response({"message": f"Group renamed from '{old_name}' to '{new_name}' successfully."})
     except Exception as e:
         db.session.rollback()
-        return jsonify({"success": False, "error": str(e)}), 500
+        return error_response(ErrorCode.SERVER_INTERNAL_ERROR[0], str(e), status_code=500)
 
 @admin_bp.route('/api/groups/kick', methods=['POST'])
+@rate_limit(ADMIN_GROUP_KICK_LIMIT, key_func=admin_key)
 def kick_group_member():
     try:
         data = request.json or {}
@@ -273,29 +309,32 @@ def kick_group_member():
         username = data.get('username', '').strip()
         
         if not group_name or not username:
-            return jsonify({"success": False, "error": "Group name and username are required."}), 400
+            return error_response(ErrorCode.VALIDATION_MISSING_FIELD[0], "Group name and username are required.", status_code=400)
             
         member = GroupMember.query.filter_by(group_name=group_name, username=username).first()
         if not member:
-            return jsonify({"success": False, "error": f"User '{username}' is not a member of '{group_name}'."}), 404
+            return error_response(ErrorCode.GROUP_NOT_FOUND[0], f"User '{username}' is not a member of '{group_name}'.", status_code=404)
             
         db.session.delete(member)
         db.session.commit()
-        return jsonify({"success": True, "message": f"Kicked '{username}' from group '{group_name}'."})
+        return success_response({"message": f"Kicked '{username}' from group '{group_name}'."})
     except Exception as e:
         db.session.rollback()
-        return jsonify({"success": False, "error": str(e)}), 500
+        return error_response(ErrorCode.SERVER_INTERNAL_ERROR[0], str(e), status_code=500)
 
 @admin_bp.route('/api/groups/delete', methods=['POST'])
+@rate_limit(ADMIN_GROUP_DELETE_LIMIT, key_func=admin_key)
 def delete_group():
     try:
         data = request.json or {}
         group_name = data.get('group_name', '').strip()
         
         if not group_name:
-            return jsonify({"success": False, "error": "Group name is required."}), 400
+            return error_response(ErrorCode.VALIDATION_MISSING_FIELD[0], "Group name is required.", status_code=400)
             
-        g = Group.query.filter_by(name=group_name).first_or_404()
+        g = Group.query.filter_by(name=group_name).first()
+        if not g:
+            return error_response(ErrorCode.GROUP_NOT_FOUND[0], f"Group '{group_name}' not found.", status_code=404)
         
         # Cascade deletes
         db.session.delete(g)
@@ -305,13 +344,13 @@ def delete_group():
         Message.query.filter_by(recipient=group_name).delete()
         
         db.session.commit()
-        return jsonify({"success": True, "message": f"Group '{group_name}' and all its messages/members deleted successfully."})
+        return success_response({"message": f"Group '{group_name}' and all its messages/members deleted successfully."})
     except Exception as e:
         db.session.rollback()
-        return jsonify({"success": False, "error": str(e)}), 500
+        return error_response(ErrorCode.SERVER_INTERNAL_ERROR[0], str(e), status_code=500)
 
-# --- Chat Viewer API ---
 @admin_bp.route('/api/chats/users', methods=['GET'])
+@rate_limit(ADMIN_CHAT_USERS_LIMIT, key_func=admin_key)
 def get_chat_users():
     try:
         users = User.query.order_by(User.username.asc()).all()
@@ -321,11 +360,12 @@ def get_chat_users():
         u_list = [{"username": u.username, "type": "user"} for u in users]
         g_list = [{"username": g.name, "type": "group"} for g in groups]
         
-        return jsonify({"success": True, "users": u_list, "groups": g_list})
+        return success_response({"users": u_list, "groups": g_list})
     except Exception as e:
-        return jsonify({"success": False, "error": str(e)}), 500
+        return error_response(ErrorCode.SERVER_INTERNAL_ERROR[0], str(e), status_code=500)
 
 @admin_bp.route('/api/chats/history', methods=['GET'])
+@rate_limit(ADMIN_CHAT_HISTORY_LIMIT, key_func=admin_key)
 def get_chat_history():
     try:
         user_a = request.args.get('user_a', '').strip()
@@ -333,14 +373,14 @@ def get_chat_history():
         chat_type = request.args.get('type', 'direct') # direct or group
         
         if not user_a:
-            return jsonify({"success": False, "error": "User A is required."}), 400
+            return error_response(ErrorCode.VALIDATION_MISSING_FIELD[0], "User A is required.", status_code=400)
             
         if chat_type == 'group':
             # load group messages
             messages = Message.query.filter_by(recipient=user_a).order_by(Message.id.asc()).all()
         else:
             if not user_b:
-                return jsonify({"success": False, "error": "User B is required for direct chat history."}), 400
+                return error_response(ErrorCode.VALIDATION_MISSING_FIELD[0], "User B is required for direct chat history.", status_code=400)
             # load direct messages between A and B
             messages = Message.query.filter(
                 or_(
@@ -368,23 +408,25 @@ def get_chat_history():
                 "msg_id": m.msg_id
             })
             
-        return jsonify({"success": True, "messages": msg_list})
+        return success_response({"messages": msg_list})
     except Exception as e:
-        return jsonify({"success": False, "error": str(e)}), 500
+        return error_response(ErrorCode.SERVER_INTERNAL_ERROR[0], str(e), status_code=500)
 
 @admin_bp.route('/api/chats/delete/<int:msg_id>', methods=['POST'])
+@rate_limit(ADMIN_CHAT_DELETE_LIMIT, key_func=admin_key)
 def delete_message(msg_id):
     try:
         m = Message.query.get_or_404(msg_id)
         db.session.delete(m)
         db.session.commit()
-        return jsonify({"success": True, "message": "Message deleted permanently."})
+        return success_response({"message": "Message deleted permanently."})
     except Exception as e:
         db.session.rollback()
-        return jsonify({"success": False, "error": str(e)}), 500
+        return error_response(ErrorCode.SERVER_INTERNAL_ERROR[0], str(e), status_code=500)
 
 # --- Media Manager API ---
 @admin_bp.route('/api/media', methods=['GET'])
+@rate_limit(ADMIN_MEDIA_LIST_LIMIT, key_func=admin_key)
 def list_media():
     try:
         upload_dir = current_app.config.get('UPLOAD_FOLDER', 'static/uploads')
@@ -402,17 +444,18 @@ def list_media():
                         "mtime": mtime,
                         "type": ext
                     })
-        return jsonify({"success": True, "media": media_files})
+        return success_response({"media": media_files})
     except Exception as e:
-        return jsonify({"success": False, "error": str(e)}), 500
+        return error_response(ErrorCode.SERVER_INTERNAL_ERROR[0], str(e), status_code=500)
 
 @admin_bp.route('/api/media/delete', methods=['POST'])
+@rate_limit(ADMIN_MEDIA_DELETE_LIMIT, key_func=admin_key)
 def delete_media_file():
     try:
         data = request.json or {}
         filename = data.get('filename', '').strip()
         if not filename:
-            return jsonify({"success": False, "error": "Filename is required."}), 400
+            return error_response(ErrorCode.VALIDATION_MISSING_FIELD[0], "Filename is required.", status_code=400)
             
         # Prevent path traversal attacks
         filename = os.path.basename(filename)
@@ -421,26 +464,27 @@ def delete_media_file():
         
         if os.path.exists(fpath) and os.path.isfile(fpath):
             os.remove(fpath)
-            return jsonify({"success": True, "message": f"File '{filename}' deleted successfully."})
+            return success_response({"message": f"File '{filename}' deleted successfully."})
         else:
-            return jsonify({"success": False, "error": f"File '{filename}' not found."}), 404
+            return error_response(ErrorCode.FILE_NOT_FOUND[0], f"File '{filename}' not found.", status_code=404)
     except Exception as e:
-        return jsonify({"success": False, "error": str(e)}), 500
+        return error_response(ErrorCode.SERVER_INTERNAL_ERROR[0], str(e), status_code=500)
 
 # --- Broadcast API ---
 @admin_bp.route('/api/broadcast', methods=['POST'])
+@rate_limit(ADMIN_BROADCAST_LIMIT, key_func=admin_key)
 def send_broadcast():
     try:
         data = request.json or {}
         message = data.get('message', '').strip()
         
         if not message:
-            return jsonify({"success": False, "error": "Broadcast message cannot be empty."}), 400
+            return error_response(ErrorCode.VALIDATION_MISSING_FIELD[0], "Broadcast message cannot be empty.", status_code=400)
             
-        b = SystemBroadcast(message=message, is_sent=False)
+        b = SystemBroadcast(message=sanitize_html(message), is_sent=False)
         db.session.add(b)
         db.session.commit()
-        return jsonify({"success": True, "message": "Broadcast message queued successfully."})
+        return success_response({"message": "Broadcast message queued successfully."})
     except Exception as e:
         db.session.rollback()
-        return jsonify({"success": False, "error": str(e)}), 500
+        return error_response(ErrorCode.SERVER_INTERNAL_ERROR[0], str(e), status_code=500)

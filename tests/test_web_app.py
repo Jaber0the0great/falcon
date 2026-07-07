@@ -10,6 +10,7 @@ class TestConfig(Config):
     TESTING = True
     SQLALCHEMY_DATABASE_URI = 'sqlite:///:memory:'
     WTF_CSRF_ENABLED = False
+    SECRET_KEY = 'test-secret-key-for-testing-only'
 
 class FalconWebTestCase(unittest.TestCase):
     def setUp(self):
@@ -71,8 +72,8 @@ class FalconWebTestCase(unittest.TestCase):
         res = self.client.get('/api/history?target=Bob')
         data = res.get_json()
         self.assertTrue(data['success'])
-        self.assertEqual(len(data['messages']), 1)
-        self.assertEqual(data['messages'][0]['msg_id'], 'msg-secret')
+        self.assertEqual(len(data['data']['messages']), 1)
+        self.assertEqual(data['data']['messages'][0]['msg_id'], 'msg-secret')
 
         # Alice deletes for self
         db_msg = Message.query.filter_by(msg_id='msg-secret').first()
@@ -83,7 +84,7 @@ class FalconWebTestCase(unittest.TestCase):
         res = self.client.get('/api/history?target=Bob')
         data = res.get_json()
         self.assertTrue(data['success'])
-        self.assertEqual(len(data['messages']), 0)
+        self.assertEqual(len(data['data']['messages']), 0)
 
         # Bob (recipient) retrieves history: should still see it since he did not delete it
         with self.client.session_transaction() as sess:
@@ -93,8 +94,8 @@ class FalconWebTestCase(unittest.TestCase):
         res = self.client.get('/api/history?target=Alice')
         data = res.get_json()
         self.assertTrue(data['success'])
-        self.assertEqual(len(data['messages']), 1)
-        self.assertEqual(data['messages'][0]['msg_id'], 'msg-secret')
+        self.assertEqual(len(data['data']['messages']), 1)
+        self.assertEqual(data['data']['messages'][0]['msg_id'], 'msg-secret')
 
     def test_history_filtering_bob_deletes_for_me(self):
         """Verify /api/history hides a message from Bob if Bob deleted it 'for me only'."""
@@ -122,7 +123,7 @@ class FalconWebTestCase(unittest.TestCase):
         res = self.client.get('/api/history?target=Alice')
         data = res.get_json()
         self.assertTrue(data['success'])
-        self.assertEqual(len(data['messages']), 0)
+        self.assertEqual(len(data['data']['messages']), 0)
 
         # Alice retrieves history: should still see it
         with self.client.session_transaction() as sess:
@@ -132,7 +133,7 @@ class FalconWebTestCase(unittest.TestCase):
         res = self.client.get('/api/history?target=Bob')
         data = res.get_json()
         self.assertTrue(data['success'])
-        self.assertEqual(len(data['messages']), 1)
+        self.assertEqual(len(data['data']['messages']), 1)
 
     def test_case_insensitive_login(self):
         """Verify that login is case-insensitive and sets session['username'] correctly."""
@@ -144,7 +145,7 @@ class FalconWebTestCase(unittest.TestCase):
             data = res.get_json()
             self.assertTrue(data['success'])
             # It should return the canonical casing from database
-            self.assertEqual(data['username'], 'Alice')
+            self.assertEqual(data['data']['username'], 'Alice')
             # Verify the session has canonical casing
             self.assertEqual(session['username'], 'Alice')
 
@@ -261,10 +262,10 @@ class FalconWebTestCase(unittest.TestCase):
         res_hist = self.client.get('/api/history?target=Alice')
         data_hist = res_hist.get_json()
         self.assertTrue(data_hist['success'])
-        self.assertEqual(len(data_hist['messages']), 1)
-        self.assertEqual(data_hist['messages'][0]['type'], 'call_log')
-        self.assertEqual(data_hist['messages'][0]['content'], 'completed')
-        self.assertEqual(data_hist['messages'][0]['duration'], 45)
+        self.assertEqual(len(data_hist['data']['messages']), 1)
+        self.assertEqual(data_hist['data']['messages'][0]['type'], 'call_log')
+        self.assertEqual(data_hist['data']['messages'][0]['content'], 'completed')
+        self.assertEqual(data_hist['data']['messages'][0]['duration'], 45)
 
     def test_group_history_access(self):
         """Verify that only members can retrieve group chat history and see messages from other members."""
@@ -301,9 +302,9 @@ class FalconWebTestCase(unittest.TestCase):
         res = self.client.get('/api/history?target=SecretClub')
         data = res.get_json()
         self.assertTrue(data['success'])
-        self.assertEqual(len(data['messages']), 1)
-        self.assertEqual(data['messages'][0]['sender'], 'Alice')
-        self.assertEqual(data['messages'][0]['content'], 'Welcome to the club!')
+        self.assertEqual(len(data['data']['messages']), 1)
+        self.assertEqual(data['data']['messages'][0]['sender'], 'Alice')
+        self.assertEqual(data['data']['messages'][0]['content'], 'Welcome to the club!')
         
         # Non-member (e.g. create user Charlie who is not in the group) tries to load history: should fail
         u3 = User(username='Charlie')
@@ -320,13 +321,19 @@ class FalconWebTestCase(unittest.TestCase):
 
     def test_admin_login_credentials(self):
         """Verify that login with admin credentials returns is_admin flag."""
+        # Create an admin user in the database
+        admin_user = User(username='admin', is_admin=True)
+        admin_user.set_password('admin_secure_pass')
+        db.session.add(admin_user)
+        db.session.commit()
+
         res = self.client.post('/auth/login', json={
             'username': 'admin',
-            'password': 'jaber142005'
+            'password': 'admin_secure_pass'
         })
         data = res.get_json()
         self.assertTrue(data['success'])
-        self.assertTrue(data['is_admin'])
+        self.assertTrue(data['data']['is_admin'])
         
         # Verify admin session is set
         with self.client.session_transaction() as sess:
@@ -353,9 +360,10 @@ class FalconWebTestCase(unittest.TestCase):
             
         res = self.client.get('/admin/api/stats')
         data = res.get_json()
+        d = data.get('data', data)
         self.assertTrue(data['success'])
-        self.assertEqual(data['total_users'], 2) # Alice & Bob
-        self.assertEqual(data['total_messages'], 0)
+        self.assertEqual(d['total_users'], 2) # Alice & Bob
+        self.assertEqual(d['total_messages'], 0)
 
     def test_admin_api_user_management(self):
         """Verify admin user API: add, edit, and delete."""

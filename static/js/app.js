@@ -22,11 +22,11 @@ function buildMessageHtml(packet) {
         const _sepIdx = packet.reply_content.indexOf(': ');
         const _rSender = _sepIdx > -1 ? packet.reply_content.substring(0, _sepIdx) : '';
         const _rText   = _sepIdx > -1 ? packet.reply_content.substring(_sepIdx + 2) : packet.reply_content;
-        replyBubbleHtml = `<div class="reply-bubble" onclick="window.scrollToMsg('${packet.reply_to}')" title="Jump to original message" style="font-size: 0.8rem; padding: 4px 8px !important; margin: 4px 0 0 0 !important; background: rgba(0,0,0,0.15); border-left: 3px solid var(--accent); border-radius: 4px; cursor: pointer; display: block !important; width: 100%;"><span class="reply-bubble-text" style="color: rgba(255,255,255,0.7); display: inline !important; white-space: normal !important; text-overflow: clip !important; overflow: visible !important;">replying to <strong>${_rSender || 'Message'}</strong>: ${_rText}</span></div>`;
+        replyBubbleHtml = `<div class="reply-bubble" onclick="window.scrollToMsg('${packet.reply_to}')" title="Jump to original message" style="font-size: 0.8rem; padding: 4px 8px !important; margin: 4px 0 0 0 !important; background: rgba(0,0,0,0.15); border-left: 3px solid var(--accent); border-radius: 4px; cursor: pointer; display: block !important; width: 100%;"><span class="reply-bubble-text" style="color: rgba(255,255,255,0.7); display: inline !important; white-space: normal !important; text-overflow: clip !important; overflow: visible !important;">replying to <strong>${escapeHtml(_rSender || 'Message')}</strong>: ${escapeHtml(_rText)}</span></div>`;
     }
     
     if(packet.type === 'text') {
-        contentHtml = packet.content;
+        contentHtml = escapeHtml(packet.content);
     } else if(packet.type === 'file') {
         const isImg = packet.name.match(/\.(jpeg|jpg|gif|png|bmp)$/i);
         const isAudio = packet.name.match(/\.(webm|mp3|wav|ogg|m4a)$/i);
@@ -59,7 +59,7 @@ function buildMessageHtml(packet) {
                 <div style="display:flex; align-items:center; gap: 10px; overflow: hidden;">
                     <div style="font-size: 1.5rem; flex-shrink: 0;">📄</div>
                     <div style="overflow: hidden;">
-                        <div style="color: #f8fafc; font-weight: 500; text-overflow: ellipsis; white-space: nowrap; overflow: hidden;" title="${displayName}">${displayName}</div>
+                        <div style="color: #f8fafc; font-weight: 500; text-overflow: ellipsis; white-space: nowrap; overflow: hidden;" title="${escapeHtml(displayName)}">${escapeHtml(displayName)}</div>
                         <div style="font-size: 0.75rem; color: rgba(255,255,255,0.7);">${formatSize(packet.size)}</div>
                     </div>
                 </div>
@@ -138,7 +138,7 @@ function buildMessageHtml(packet) {
             if (_entries.length > 0) {
                 const _safeToStr = String(packet.to || '').replace(/'/g, "\\'");
                 reactionsInnerHtml = _entries.map(([emoji, users]) =>
-                    `<button class="reaction-chip ${users.includes(myUsername) ? 'my-reaction' : ''}" onclick="window.reactTo('${packet.msg_id}','${emoji}','${_safeToStr}')" title="${users.join(', ')}">${emoji} <span>${users.length}</span></button>`
+                    `<button class="reaction-chip ${users.includes(myUsername) ? 'my-reaction' : ''}" onclick="window.reactTo('${packet.msg_id}','${emoji}','${_safeToStr}')" title="${users.map(u => escapeHtml(u)).join(', ')}">${emoji} <span>${users.length}</span></button>`
                 ).join('');
             }
         } catch(e) {}
@@ -205,7 +205,7 @@ function buildMessageHtml(packet) {
         <div class="selection-checkbox-container" style="display: ${window.isSelectionMode ? 'block' : 'none'}; order: -1; flex-shrink: 0;">
             <input type="checkbox" class="message-select-checkbox form-check-input" style="width: 22px; height: 22px; cursor: pointer; accent-color: var(--accent);" data-msg-id="${packet.msg_id}" ${window.selectedMessageIds.has(packet.msg_id) ? 'checked' : ''} onchange="onMessageSelectedChange('${packet.msg_id}', this.checked)">
         </div>
-        <div class="message-bubble ${isMine ? 'msg-mine' : 'msg-other'} position-relative" id="msg-container-${packet.msg_id}" style="overflow: visible; max-width: 65%;"><div class="message-main-content">${isMine ? '' : `<strong class="message-sender-name" style="color: var(--accent); margin-right: 5px; font-size: 0.95rem;">${packet.sender}:</strong>`}<span class="message-body">${contentHtml}</span><span class="msg-time" style="font-size: 0.7rem; color: rgba(255,255,255,0.6); margin: 0 0 0 8px !important; display: inline-block !important; text-align: left !important; vertical-align: baseline !important;">${packet.time || ''}${statusHtml}</span></div>${replyBubbleHtml}<!-- Context dropdown --><div class="dropdown position-absolute" style="top: 5px; right: 5px; z-index: 5;"><button class="msg-menu-btn btn btn-link text-white p-0" style="opacity: 0; line-height: 1; transition: opacity 0.2s;" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Message options"><i class="bi bi-three-dots-vertical" style="font-size: 1.1rem;"></i></button><ul class="dropdown-menu dropdown-menu-dark dropdown-menu-end shadow-lg" style="border: 1px solid rgba(255,255,255,0.15); background-color: #1e293b; z-index: 1050;">${dropdownItemsHtml}</ul></div><div id="reactions-${packet.msg_id}" class="reaction-bar-container">${reactionsInnerHtml}</div></div>
+        <div class="message-bubble ${isMine ? 'msg-mine' : 'msg-other'} position-relative" id="msg-container-${packet.msg_id}" style="overflow: visible; max-width: 65%;"><div class="message-main-content">${isMine ? '' : `<strong class="message-sender-name" style="color: var(--accent); margin-right: 5px; font-size: 0.95rem;">${escapeHtml(packet.sender)}:</strong>`}<span class="message-body">${contentHtml}</span><span class="msg-time" style="font-size: 0.7rem; color: rgba(255,255,255,0.6); margin: 0 0 0 8px !important; display: inline-block !important; text-align: left !important; vertical-align: baseline !important;">${packet.time || ''}${statusHtml}</span></div>${replyBubbleHtml}<!-- Context dropdown --><div class="dropdown position-absolute" style="top: 5px; right: 5px; z-index: 5;"><button class="msg-menu-btn btn btn-link text-white p-0" style="opacity: 0; line-height: 1; transition: opacity 0.2s;" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Message options"><i class="bi bi-three-dots-vertical" style="font-size: 1.1rem;"></i></button><ul class="dropdown-menu dropdown-menu-dark dropdown-menu-end shadow-lg" style="border: 1px solid rgba(255,255,255,0.15); background-color: #1e293b; z-index: 1050;">${dropdownItemsHtml}</ul></div><div id="reactions-${packet.msg_id}" class="reaction-bar-container">${reactionsInnerHtml}</div></div>
     </div>`;
 }
 
@@ -221,7 +221,7 @@ async function loadHistory() {
     
     if(data.success) {
         let htmlStr = '';
-        data.messages.forEach(packet => {
+        data.data.messages.forEach(packet => {
             htmlStr += buildMessageHtml(packet);
         });
         mc.innerHTML = htmlStr;
@@ -337,11 +337,12 @@ if(document.getElementById('send-btn')) {
         const data = await res.json();
         
         if(data.success) {
+            const d = data.data || data;
             const packet = {
                 type: 'file',
                 to: currentTarget,
-                name: data.filename,
-                size: data.size,
+                name: d.filename,
+                size: d.size,
                 time: new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}),
                 msg_id: crypto.randomUUID(),
                 status: 'sent',
@@ -390,11 +391,12 @@ if(document.getElementById('send-btn')) {
                     const data = await res.json();
                     
                     if(data.success) {
+                        const d = data.data || data;
                         const packet = {
                             type: 'file',
                             to: currentTarget,
-                            name: data.filename,
-                            size: data.size,
+                            name: d.filename,
+                            size: d.size,
                             time: new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}),
                             msg_id: crypto.randomUUID(),
                             status: 'sent',
@@ -835,7 +837,7 @@ function populateForwardTargets() {
             const statusDot = `<span class="badge ${u.status === 'Available' ? 'bg-success' : 'bg-secondary'} rounded-pill me-2">${u.status === 'Available' ? 'Online' : 'Offline'}</span>`;
             item.innerHTML = `
                 <div>
-                    <strong>${u.name}</strong>
+                    <strong>${escapeHtml(u.name)}</strong>
                     <div style="font-size: 0.75rem; color: #94a3b8;">${statusDot}</div>
                 </div>
                 <span class="btn btn-sm btn-primary">Select</span>
@@ -855,7 +857,7 @@ function showToast(message) {
     <div id="${toastId}" class="toast align-items-center text-white bg-success border-0 shadow-lg" role="alert" aria-live="assertive" aria-atomic="true" style="backdrop-filter: blur(10px); background-color: rgba(25, 135, 84, 0.9) !important;">
         <div class="d-flex">
             <div class="toast-body">
-                <i class="bi bi-info-circle me-2"></i> ${message}
+                <i class="bi bi-info-circle me-2"></i> ${escapeHtml(message)}
             </div>
             <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
         </div>
@@ -938,7 +940,7 @@ window.applyReactions = function(msgId, reactionsJson) {
         if (entries.length > 0) {
             const _to = cached ? String(cached.to || '').replace(/'/g, "\\'") : currentTarget;
             innerHtml = entries.map(([emoji, users]) =>
-                `<button class="reaction-chip ${users.includes(myUsername) ? 'my-reaction' : ''}" onclick="window.reactTo('${msgId}','${emoji}','${_to}')" title="${users.join(', ')}">${emoji} <span>${users.length}</span></button>`
+                `<button class="reaction-chip ${users.includes(myUsername) ? 'my-reaction' : ''}" onclick="window.reactTo('${msgId}','${emoji}','${_to}')" title="${users.map(u => escapeHtml(u)).join(', ')}">${emoji} <span>${users.length}</span></button>`
             ).join('');
         }
     } catch(e) { console.error('applyReactions error:', e); }
@@ -984,9 +986,9 @@ if (document.getElementById('btn-create-group-modal')) {
                         item.className = 'list-group-item d-flex align-items-center justify-content-between bg-dark text-white border-secondary py-2 px-3';
                         item.innerHTML = `
                             <div class="d-flex align-items-center" style="width: 100%;">
-                                <input class="form-check-input create-group-user-checkbox me-2" type="checkbox" value="${u.name}" id="${labelId}" style="width: 18px; height: 18px; cursor: pointer; accent-color: var(--accent);">
+                                <input class="form-check-input create-group-user-checkbox me-2" type="checkbox" value="${escapeHtml(u.name)}" id="${labelId}" style="width: 18px; height: 18px; cursor: pointer; accent-color: var(--accent);">
                                 <label class="form-check-label text-white flex-grow-1" for="${labelId}" style="cursor: pointer; font-weight: 500;">
-                                    👤 ${u.name} ${statusBadge}
+                                    👤 ${escapeHtml(u.name)} ${statusBadge}
                                 </label>
                             </div>
                         `;
@@ -1105,7 +1107,7 @@ if (document.getElementById('btn-submit-create-group')) {
                     cTitle.focus();
                 }
             } else {
-                alert("Error: " + data.error);
+                alert("Error: " + (data.error.message || data.error));
             }
         } catch(e) {
             console.error(e);
@@ -1135,7 +1137,7 @@ window.requestJoinGroup = async function(groupName) {
                 window.selectGroup(groupName, item);
             }
         } else {
-            alert("Error: " + data.error);
+            alert("Error: " + (data.error.message || data.error));
         }
     } catch(e) {
         console.error(e);
@@ -1163,7 +1165,7 @@ window.acceptGroupInvite = async function(groupName, skipConfirm = false) {
                 window.selectGroup(groupName, item);
             }
         } else {
-            alert("Error: " + data.error);
+            alert("Error: " + (data.error.message || data.error));
         }
     } catch(e) {
         console.error(e);
@@ -1191,7 +1193,7 @@ window.rejectGroupInvite = async function(groupName, skipConfirm = false) {
                 window.selectGroup(groupName, item);
             }
         } else {
-            alert("Error: " + data.error);
+            alert("Error: " + (data.error.message || data.error));
         }
     } catch(e) {
         console.error(e);
@@ -1219,19 +1221,20 @@ window.loadGroupAdminData = async function(groupName) {
         const resReq = await fetch(`/api/groups/requests?group_name=${groupName}`);
         const dataReq = await resReq.json();
         const reqList = document.getElementById('group-requests-list');
-        if (reqList && dataReq.success) {
-            reqList.innerHTML = '';
-            if (dataReq.requests.length === 0) {
-                reqList.innerHTML = '<div class="small text-muted p-1">No requests</div>';
-            } else {
-                dataReq.requests.forEach(username => {
+            if (reqList && dataReq.success) {
+                reqList.innerHTML = '';
+                const requests = dataReq.data ? dataReq.data.requests : dataReq.requests;
+                if (requests.length === 0) {
+                    reqList.innerHTML = '<div class="small text-muted p-1">No requests</div>';
+                } else {
+                    requests.forEach(username => {
                     const item = document.createElement('div');
                     item.className = 'list-group-item bg-dark text-white border-secondary d-flex align-items-center justify-content-between p-1';
                     item.innerHTML = `
-                        <span class="small">${username}</span>
+                        <span class="small">${escapeHtml(username)}</span>
                         <div>
-                            <button class="btn btn-xs btn-success py-0 px-1" onclick="window.respondToJoinRequest('${groupName}', '${username}', 'accept')" style="font-size:0.75rem;">Accept</button>
-                            <button class="btn btn-xs btn-danger py-0 px-1" onclick="window.respondToJoinRequest('${groupName}', '${username}', 'reject')" style="font-size:0.75rem;">Reject</button>
+                            <button class="btn btn-xs btn-success py-0 px-1" onclick="window.respondToJoinRequest('${groupName}', '${escapeHtml(username)}', 'accept')" style="font-size:0.75rem;">Accept</button>
+                            <button class="btn btn-xs btn-danger py-0 px-1" onclick="window.respondToJoinRequest('${groupName}', '${escapeHtml(username)}', 'reject')" style="font-size:0.75rem;">Reject</button>
                         </div>
                     `;
                     reqList.appendChild(item);
@@ -1248,9 +1251,10 @@ window.loadGroupAdminData = async function(groupName) {
         const dataMem = await resMem.json();
         const memList = document.getElementById('group-members-list');
         if (memList && dataMem.success) {
-            window.currentGroupMembers = dataMem.members || [];
+            const members = dataMem.data ? dataMem.data.members : dataMem.members;
+            window.currentGroupMembers = members || [];
             memList.innerHTML = '';
-            dataMem.members.forEach(username => {
+            members.forEach(username => {
                 const item = document.createElement('div');
                 item.className = 'list-group-item bg-dark text-white border-secondary d-flex align-items-center justify-content-between p-1';
                 
@@ -1262,7 +1266,7 @@ window.loadGroupAdminData = async function(groupName) {
                 }
                 
                 item.innerHTML = `
-                    <span class="small">${username}</span>
+                    <span class="small">${escapeHtml(username)}</span>
                     ${kickBtnHtml}
                 `;
                 memList.appendChild(item);
@@ -1288,7 +1292,7 @@ window.respondToJoinRequest = async function(groupName, username, action) {
             showToast(`Join request ${action}ed.`);
             window.loadGroupAdminData(groupName);
         } else {
-            alert("Error: " + data.error);
+            alert("Error: " + (data.error.message || data.error));
         }
     } catch(e) {
         console.error(e);
@@ -1310,7 +1314,7 @@ window.kickGroupMember = async function(groupName, username) {
             showToast(`${username} was kicked.`);
             window.loadGroupAdminData(groupName);
         } else {
-            alert("Error: " + data.error);
+            alert("Error: " + (data.error.message || data.error));
         }
     } catch(e) {
         console.error(e);
@@ -1339,7 +1343,7 @@ if (document.getElementById('btn-delete-group')) {
                 }
                 window.selectUser('All');
             } else {
-                alert("Error: " + data.error);
+                alert("Error: " + (data.error.message || data.error));
             }
         } catch(e) {
             console.error(e);
@@ -1369,7 +1373,7 @@ if (document.getElementById('leave-group-btn')) {
                 }
                 window.selectUser('All');
             } else {
-                alert("Error: " + data.error);
+                alert("Error: " + (data.error.message || data.error));
             }
         } catch(e) {
             console.error(e);
@@ -1400,9 +1404,9 @@ if (document.getElementById('btn-open-invite-modal')) {
                     item.className = 'list-group-item d-flex align-items-center justify-content-between bg-dark text-white border-secondary py-2 px-3';
                     item.innerHTML = `
                         <div class="d-flex align-items-center" style="width: 100%;">
-                            <input class="form-check-input invite-member-checkbox me-2" type="checkbox" value="${u.name}" id="${labelId}" style="width: 18px; height: 18px; cursor: pointer; accent-color: var(--accent);">
+                            <input class="form-check-input invite-member-checkbox me-2" type="checkbox" value="${escapeHtml(u.name)}" id="${labelId}" style="width: 18px; height: 18px; cursor: pointer; accent-color: var(--accent);">
                             <label class="form-check-label text-white flex-grow-1" for="${labelId}" style="cursor: pointer; font-weight: 500;">
-                                👤 ${u.name} ${statusBadge}
+                                👤 ${escapeHtml(u.name)} ${statusBadge}
                             </label>
                         </div>
                     `;
@@ -1446,7 +1450,7 @@ if (document.getElementById('btn-submit-invites')) {
                     window.loadGroupAdminData(currentTarget);
                 }
             } else {
-                alert("Error: " + data.error);
+                alert("Error: " + (data.error.message || data.error));
             }
         } catch(e) {
             console.error("Error sending invites:", e);

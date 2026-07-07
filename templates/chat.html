@@ -2,7 +2,7 @@
 {% block content %}
 <style>
     /* Modern Dark Theme - WhatsApp/Discord Inspired */
-    :root {
+    [data-theme="dark"] {
         --bg-dark: #0f172a;
         --bg-sidebar: #1e293b;
         --bg-chat: #0b1120;
@@ -13,6 +13,19 @@
         --msg-mine: #1d4ed8;
         --msg-other: #334155;
         --border-color: #334155;
+    }
+
+    [data-theme="light"] {
+        --bg-dark: #f1f5f9;
+        --bg-sidebar: #e2e8f0;
+        --bg-chat: #ffffff;
+        --text-primary: #0f172a;
+        --text-secondary: #64748b;
+        --accent: #2563eb;
+        --accent-hover: #1d4ed8;
+        --msg-mine: #2563eb;
+        --msg-other: #e2e8f0;
+        --border-color: #cbd5e1;
     }
     
     body, html {
@@ -38,7 +51,7 @@
 
     /* Sidebar */
     .sidebar {
-        width: 350px;
+        width: clamp(280px, 30vw, 350px);
         background-color: var(--bg-sidebar);
         border-right: 1px solid var(--border-color);
         display: flex;
@@ -54,7 +67,7 @@
         display: flex;
         justify-content: space-between;
         align-items: center;
-        background-color: #1e293b;
+        background-color: var(--bg-sidebar);
     }
 
     .search-bar {
@@ -67,7 +80,7 @@
         padding: 10px 15px;
         border-radius: 20px;
         border: none;
-        background-color: #0f172a;
+        background-color: var(--bg-dark);
         color: white;
         outline: none;
     }
@@ -88,7 +101,7 @@
     }
 
     .user-item:hover, .user-item.active, .user-item:focus-within {
-        background-color: #334155;
+        background-color: var(--border-color);
     }
 
     .user-chat-btn {
@@ -113,6 +126,8 @@
         margin-right: 12px;
     }
     .online { background-color: #22c55e; box-shadow: 0 0 8px #22c55e; }
+    .busy { background-color: #f97316; box-shadow: 0 0 8px #f97316; }
+    .away { background-color: #eab308; box-shadow: 0 0 8px #eab308; }
     .offline { background-color: #64748b; }
 
     /* Main Chat Area */
@@ -124,6 +139,7 @@
         position: relative;
         height: 100%;
         min-height: 0;
+        min-width: 0;
         overflow: hidden;
     }
 
@@ -134,7 +150,7 @@
         display: flex;
         justify-content: space-between;
         align-items: center;
-        height: 70px;
+        height: clamp(56px, 10vh, 70px);
         flex-shrink: 0;
     }
 
@@ -193,7 +209,7 @@
         padding: 12px 20px;
         border-radius: 25px;
         border: none;
-        background-color: #0f172a;
+        background-color: var(--bg-dark);
         color: white;
         outline: none;
         font-size: 1rem;
@@ -210,6 +226,8 @@
         align-items: center;
         justify-content: center;
         padding: 10px;
+        min-width: 44px;
+        min-height: 44px;
     }
 
     .action-btn:hover {
@@ -237,8 +255,8 @@
         color: white;
         border: none;
         border-radius: 50%;
-        width: 35px;
-        height: 35px;
+        width: 44px;
+        height: 44px;
         display: flex;
         align-items: center;
         justify-content: center;
@@ -297,7 +315,7 @@
         align-items: center;
         gap: 10px;
         padding: 8px 20px;
-        background: #1e293b;
+        background: var(--bg-sidebar);
         border-top: 2px solid var(--accent);
         flex-shrink: 0;
     }
@@ -327,7 +345,9 @@
         color: rgba(255,255,255,0.5);
         font-size: 1.2rem;
         cursor: pointer;
-        padding: 4px 8px;
+        padding: 10px;
+        min-width: 44px;
+        min-height: 44px;
         border-radius: 50%;
         transition: color 0.2s, background 0.2s;
         flex-shrink: 0;
@@ -368,7 +388,7 @@
         top: 0;
         display: none;
         border: 1px solid rgba(255,255,255,0.15);
-        background-color: #1e293b;
+        background-color: var(--bg-sidebar);
         padding: 5px 0;
     }
     .msg-mine .dropdown-submenu > .dropdown-menu {
@@ -408,9 +428,9 @@
     .emoji-picker-container {
         position: absolute;
         bottom: 80px;
-        left: 25px;
-        width: 320px;
-        height: 320px;
+        left: max(10px, 5%);
+        width: min(90vw, 320px);
+        height: min(50vh, 320px);
         background: rgba(30, 41, 59, 0.85);
         backdrop-filter: blur(20px);
         border: 1px solid rgba(255, 255, 255, 0.15);
@@ -444,7 +464,9 @@
         background: none;
         border: none;
         font-size: 1.25rem;
-        padding: 6px 12px;
+        padding: 11px 14px;
+        min-width: 44px;
+        min-height: 44px;
         border-radius: 8px;
         cursor: pointer;
         transition: background 0.2s, transform 0.15s;
@@ -471,7 +493,9 @@
         background: none;
         border: none;
         font-size: 1.5rem;
-        padding: 4px;
+        padding: 8px;
+        min-width: 44px;
+        min-height: 44px;
         cursor: pointer;
         border-radius: 8px;
         display: flex;
@@ -490,6 +514,96 @@
         100% { outline: 3px solid transparent; background: transparent; border-radius: 12px; }
     }
     .highlight-flash { animation: flashHighlight 1.8s ease-out forwards; }
+
+    /* ── Voice Call Screen ──────────────────────────────── */
+    #active-call-screen {
+        background: var(--bg-sidebar) !important;
+    }
+    #accept-call-btn, #reject-call-btn, #mute-call-btn, #end-call-btn {
+        transition: transform 0.15s, opacity 0.2s;
+    }
+    #accept-call-btn:hover, #reject-call-btn:hover, #mute-call-btn:hover, #end-call-btn:hover {
+        transform: scale(1.08);
+        opacity: 0.9;
+    }
+
+    /* ── Presence Indicators ───────────────────────────── */
+    .status-select {
+        background: var(--bg-dark);
+        color: white;
+        border: 1px solid var(--border-color);
+        border-radius: 12px;
+        padding: 2px 6px;
+        font-size: 0.7rem;
+        cursor: pointer;
+        outline: none;
+        max-width: 90px;
+    }
+    .status-select option { background: var(--bg-sidebar); color: white; }
+
+    .my-status-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        display: inline-block;
+        flex-shrink: 0;
+    }
+
+    .last-seen-label {
+        font-size: 0.7rem;
+        color: var(--text-secondary);
+        opacity: 0.8;
+    }
+
+    /* ── Typing Indicator ───────────────────────────── */
+    #typing-indicator {
+        transition: opacity 0.3s ease, min-height 0.3s ease;
+    }
+    #typing-indicator.hidden {
+        opacity: 0;
+        min-height: 0;
+        padding: 0 25px !important;
+        border-bottom-color: transparent !important;
+    }
+    .typing-dots::after {
+        content: '';
+        animation: typingDot 1.4s infinite;
+    }
+    @keyframes typingDot {
+        0%   { content: ''; }
+        25%  { content: '.'; }
+        50%  { content: '..'; }
+        75%  { content: '...'; }
+        100% { content: ''; }
+    }
+
+    /* ── Collapsible Offline Section ─────────────────────── */
+    .offline-section { margin-top: 6px; }
+    .offline-header {
+        cursor: pointer;
+        user-select: none;
+        display: flex;
+        align-items: center;
+        padding: 6px 15px;
+        border-radius: 8px;
+        transition: background 0.2s;
+        font-size: 0.78rem;
+        color: var(--text-secondary);
+    }
+    .offline-header:hover { background: var(--border-color); }
+    .offline-header .toggle-icon {
+        margin-right: 6px;
+        font-size: 0.65rem;
+        transition: transform 0.2s;
+    }
+    .offline-header .toggle-icon.collapsed { transform: rotate(-90deg); }
+    .offline-header .offline-count {
+        margin-left: 6px;
+        font-size: 0.65rem;
+        opacity: 0.5;
+    }
+    .offline-body { overflow: hidden; transition: max-height 0.3s ease; }
+    .offline-body.closed { max-height: 0; }
 
     @media (max-width: 991.98px) {
         .sidebar {
@@ -540,14 +654,24 @@
             font-size: 0.95rem !important;
         }
         .action-btn {
-            padding: 5px !important;
+            padding: 11px !important;
             font-size: 1.3rem !important;
+            min-width: 44px !important;
+            min-height: 44px !important;
         }
         .send-btn {
-            width: 40px !important;
-            height: 40px !important;
+            width: 44px !important;
+            height: 44px !important;
         }
         
+        #active-call-screen {
+            padding: 12px !important;
+        }
+        #active-call-screen > div {
+            gap: 0.8rem !important;
+            flex-wrap: wrap !important;
+            justify-content: center !important;
+        }
         #selection-bar {
             flex-direction: column !important;
             gap: 10px !important;
@@ -570,14 +694,15 @@
     <aside class="sidebar" aria-label="Sidebar Navigation">
         <div class="sidebar-header">
             <h2 style="margin:0; font-size: 1.5rem; font-weight: 700; color: white;" aria-label="Falcon Chat Application">Falcon<span style="color:var(--accent);" aria-hidden="true">Chat</span></h2>
-            <div style="display:flex; align-items:center; gap: 15px;">
+            <div style="display:flex; align-items:center; gap: 10px;">
                 <span id="my-username" style="font-weight: 600;" aria-label="Your Username"></span>
-                <button id="logout-btn" class="action-btn" title="Logout" aria-label="Log out from application">🚪</button>
+                <span id="my-status-dot" class="my-status-dot online" aria-hidden="true"></span>
+                <button id="settings-btn" class="action-btn" title="Settings" aria-label="Open Settings">⚙️</button>
             </div>
         </div>
         
         <div class="search-bar" role="search">
-            <input type="text" id="user-search-input" class="search-input" placeholder="Search users..." aria-label="Search users and rooms">
+            <input type="text" id="user-search-input" class="search-input" placeholder="" aria-label="Search users and rooms" autocomplete="off">
         </div>
         
         <div style="padding: 0 15px 10px 15px;">
@@ -636,13 +761,13 @@
                 </div>
                 <div class="col-md-4">
                     <label class="form-label small text-secondary m-0">Join Requests (طلبات الانضمام)</label>
-                    <div id="group-requests-list" class="list-group list-group-flush border border-secondary rounded" style="max-height: 80px; overflow-y: auto; background: #0f172a;">
+                    <div id="group-requests-list" class="list-group list-group-flush border border-secondary rounded" style="max-height: 20vh; overflow-y: auto; background: var(--bg-dark);">
                         <div class="small text-muted p-1">No requests</div>
                     </div>
                 </div>
                 <div class="col-md-4">
                     <label class="form-label small text-secondary m-0">Members (الأعضاء)</label>
-                    <div id="group-members-list" class="list-group list-group-flush border border-secondary rounded" style="max-height: 80px; overflow-y: auto; background: #0f172a;">
+                    <div id="group-members-list" class="list-group list-group-flush border border-secondary rounded" style="max-height: 20vh; overflow-y: auto; background: var(--bg-dark);">
                     </div>
                 </div>
             </div>
@@ -655,6 +780,11 @@
             <p class="text-secondary mb-4" id="non-member-group-status-text">You are not a member of this group. You must be invited or submit a join request to participate.</p>
             <div id="non-member-actions-container">
             </div>
+        </div>
+
+        <!-- Typing Indicator -->
+        <div id="typing-indicator" style="display:none; padding: 4px 25px; font-size: 0.78rem; color: var(--text-secondary); font-style: italic; min-height: 0; flex-shrink: 0; border-bottom: 1px solid transparent;">
+            <span id="typing-text"></span>
         </div>
 
         <!-- Messages Area -->
@@ -690,7 +820,7 @@
         </div>
 
         <!-- Create Group Screen (appears like the calls screen above footer) -->
-        <div id="create-group-screen" tabindex="-1" role="region" aria-label="Create Group Screen" class="d-none" style="display:none; flex-direction:column; align-items:center; justify-content:center; padding: 20px; background: #1e293b; border-top: 2px solid #3b82f6; border-bottom: 2px solid #3b82f6; width: 100%;">
+        <div id="create-group-screen" tabindex="-1" role="region" aria-label="Create Group Screen" class="d-none" style="display:none; flex-direction:column; align-items:center; justify-content:center; padding: 20px; background: var(--bg-sidebar); border-top: 2px solid #3b82f6; border-bottom: 2px solid #3b82f6; width: 100%;">
             <h2 id="create-group-title" aria-live="assertive" style="color:white; margin-bottom:1.2rem; font-weight:bold; font-size: 1.4rem; outline: none;">👥 Create New Group (إنشاء مجموعة جديدة)</h2>
             <div style="width: 100%; max-width: 450px; display: flex; flex-direction: column; gap: 12px;" role="form" aria-labelledby="create-group-title">
                 <div>
@@ -705,7 +835,7 @@
                 </div>
                 <div>
                     <label class="form-label text-secondary small mb-1" style="font-weight: 500;">Select Members (تحديد الأعضاء)</label>
-                    <div id="create-group-users-list" class="list-group border border-secondary rounded" style="max-height: 150px; overflow-y: auto; background: #0f172a; padding: 5px;" role="group" aria-label="Select group members list">
+                    <div id="create-group-users-list" class="list-group border border-secondary rounded" style="max-height: 30vh; overflow-y: auto; background: var(--bg-dark); padding: 5px;" role="group" aria-label="Select group members list">
                         <!-- Users dynamically injected here with checkboxes -->
                     </div>
                 </div>
@@ -978,17 +1108,17 @@
 <div class="modal fade" id="forwardModal" tabindex="-1" aria-labelledby="forwardModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
         <div class="modal-content bg-dark text-white shadow-lg" style="border: 1px solid var(--border-color); border-radius: 12px;">
-            <div class="modal-header" style="border-bottom: 1px solid var(--border-color); background-color: #1e293b;">
+            <div class="modal-header" style="border-bottom: 1px solid var(--border-color); background-color: var(--bg-sidebar);">
                 <h5 class="modal-title" id="forwardModalLabel"><i class="bi bi-share me-2 text-info"></i>Forward Message</h5>
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
-            <div class="modal-body" style="max-height: 400px; overflow-y: auto; background-color: #0f172a;">
+            <div class="modal-body" style="max-height: 60dvh; overflow-y: auto; background-color: var(--bg-dark);">
                 <p class="text-secondary small">Choose a chat to forward the message(s) to:</p>
                 <div id="forward-targets-list" class="list-group list-group-flush">
                     <!-- Loaded dynamically in app.js -->
                 </div>
             </div>
-            <div class="modal-footer" style="border-top: 1px solid var(--border-color); background-color: #1e293b;">
+            <div class="modal-footer" style="border-top: 1px solid var(--border-color); background-color: var(--bg-sidebar);">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
             </div>
         </div>
@@ -999,14 +1129,14 @@
 <div class="modal fade" id="deleteConfirmModal" tabindex="-1" aria-labelledby="deleteConfirmModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content bg-dark text-white shadow-lg" style="border: 1px solid var(--border-color); border-radius: 12px;">
-            <div class="modal-header" style="border-bottom: 1px solid var(--border-color); background-color: #1e293b;">
+            <div class="modal-header" style="border-bottom: 1px solid var(--border-color); background-color: var(--bg-sidebar);">
                 <h5 class="modal-title" id="deleteConfirmModalLabel"><i class="bi bi-trash me-2 text-danger"></i>Delete Message</h5>
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
-            <div class="modal-body" style="background-color: #0f172a;">
+            <div class="modal-body" style="background-color: var(--bg-dark);">
                 <p id="delete-confirm-text">How do you want to delete this message?</p>
             </div>
-            <div class="modal-footer" style="border-top: 1px solid var(--border-color); background-color: #1e293b;">
+            <div class="modal-footer" style="border-top: 1px solid var(--border-color); background-color: var(--bg-sidebar);">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
                 <button type="button" class="btn btn-warning" id="btn-delete-me-only">Delete for Me (حذف عندي بس)</button>
                 <button type="button" class="btn btn-danger" id="btn-delete-everyone">Delete for Everyone (عند الجميع)</button>
@@ -1019,14 +1149,14 @@
 <div class="modal fade" id="groupInviteModal" tabindex="-1" aria-labelledby="groupInviteModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content bg-dark text-white shadow-lg" style="border: 1px solid var(--border-color); border-radius: 12px;">
-            <div class="modal-header" style="border-bottom: 1px solid var(--border-color); background-color: #1e293b;">
+            <div class="modal-header" style="border-bottom: 1px solid var(--border-color); background-color: var(--bg-sidebar);">
                 <h5 class="modal-title" id="groupInviteModalLabel"><i class="bi bi-envelope-open-fill me-2 text-info"></i>Group Invitation (دعوة لمجموعة)</h5>
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
-            <div class="modal-body" style="background-color: #0f172a;">
+            <div class="modal-body" style="background-color: var(--bg-dark);">
                 <p id="group-invite-modal-text" style="font-size: 1.1rem; line-height: 1.5;"></p>
             </div>
-            <div class="modal-footer" style="border-top: 1px solid var(--border-color); background-color: #1e293b;">
+            <div class="modal-footer" style="border-top: 1px solid var(--border-color); background-color: var(--bg-sidebar);">
                 <button type="button" class="btn btn-danger px-4" id="btn-decline-invite" style="border-radius: 20px;">Decline (رفض)</button>
                 <button type="button" class="btn btn-success px-4" id="btn-accept-invite" style="border-radius: 20px;">Accept Invite (قبول الدعوة)</button>
             </div>
@@ -1038,19 +1168,127 @@
 <div class="modal fade" id="groupInviteMembersModal" tabindex="-1" aria-labelledby="groupInviteMembersModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
         <div class="modal-content bg-dark text-white shadow-lg" style="border: 1px solid var(--border-color); border-radius: 12px;">
-            <div class="modal-header" style="border-bottom: 1px solid var(--border-color); background-color: #1e293b;">
+            <div class="modal-header" style="border-bottom: 1px solid var(--border-color); background-color: var(--bg-sidebar);">
                 <h5 class="modal-title" id="groupInviteMembersModalLabel"><i class="bi bi-person-plus-fill me-2 text-info"></i>Invite Members (دعوة أعضاء)</h5>
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
-            <div class="modal-body" style="max-height: 400px; overflow-y: auto; background-color: #0f172a;">
+            <div class="modal-body" style="max-height: 60dvh; overflow-y: auto; background-color: var(--bg-dark);">
                 <p class="text-secondary small mb-3">Select users to invite to <span id="invite-group-modal-name" class="fw-bold text-white"></span>:</p>
                 <div id="invite-members-modal-list" class="list-group">
                     <!-- Checkbox list of users injected here -->
                 </div>
             </div>
-            <div class="modal-footer" style="border-top: 1px solid var(--border-color); background-color: #1e293b;">
+            <div class="modal-footer" style="border-top: 1px solid var(--border-color); background-color: var(--bg-sidebar);">
                 <button type="button" class="btn btn-secondary px-4" data-bs-dismiss="modal" style="border-radius: 20px;">Cancel (إلغاء)</button>
                 <button type="button" class="btn btn-primary px-4" id="btn-submit-invites" style="border-radius: 20px;">Send Invites (إرسال الدعوات)</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Settings Modal -->
+<div class="modal fade" id="settingsModal" tabindex="-1" aria-labelledby="settingsModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content bg-dark text-white shadow-lg" style="border: 1px solid var(--border-color); border-radius: 12px;">
+            <div class="modal-header" style="border-bottom: 1px solid var(--border-color); background-color: var(--bg-sidebar);">
+                <h5 class="modal-title" id="settingsModalLabel"><i class="bi bi-gear me-2 text-info"></i>Settings</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body" style="background-color: var(--bg-dark);">
+
+                <!-- Profile Section -->
+                <div class="mb-4">
+                    <h6 class="text-secondary mb-3"><i class="bi bi-person me-2"></i>Profile</h6>
+                    <div class="mb-3">
+                        <label class="form-label small text-secondary">Username</label>
+                        <div class="input-group">
+                            <input type="text" id="settings-username" class="form-control bg-dark text-white border-secondary" value="" maxlength="50">
+                            <button id="settings-rename-btn" class="btn btn-primary" disabled>Rename</button>
+                        </div>
+                        <div id="settings-rename-status" class="small mt-1"></div>
+                    </div>
+                    <div id="settings-rename-preview" class="small text-secondary mb-2 p-2" style="background: rgba(255,255,255,0.05); border-radius: 6px; display: none;"></div>
+                </div>
+
+                <!-- Security Section -->
+                <div class="mb-4">
+                    <h6 class="text-secondary mb-3"><i class="bi bi-shield-lock me-2"></i>Security</h6>
+                    <div class="mb-3">
+                        <label class="form-label small text-secondary">Current Password</label>
+                        <input type="password" id="settings-current-pw" class="form-control bg-dark text-white border-secondary">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label small text-secondary">New Password</label>
+                        <input type="password" id="settings-new-pw" class="form-control bg-dark text-white border-secondary">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label small text-secondary">Confirm New Password</label>
+                        <input type="password" id="settings-confirm-pw" class="form-control bg-dark text-white border-secondary">
+                    </div>
+                    <div id="settings-pw-status" class="small mb-2"></div>
+                    <button id="settings-pw-btn" class="btn btn-warning btn-sm">Change Password</button>
+                </div>
+
+                <!-- Appearance Section -->
+                <div class="mb-4">
+                    <h6 class="text-secondary mb-3"><i class="bi bi-palette me-2"></i>Appearance</h6>
+                    <div class="mb-3">
+                        <label class="form-label small text-secondary">Theme</label>
+                        <select id="settings-theme" class="form-select bg-dark text-white border-secondary">
+                            <option value="system">System</option>
+                            <option value="dark">Dark</option>
+                            <option value="light">Light</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Presence Section -->
+                <div class="mb-3">
+                    <h6 class="text-secondary mb-3"><i class="bi bi-circle me-2"></i>Presence</h6>
+                    <div class="mb-3">
+                        <label class="form-label small text-secondary">Current Status (الحالة الحالية)</label>
+                        <select id="status-selector" class="form-select bg-dark text-white border-secondary" aria-label="Set your status">
+                            <option value="Available">Available</option>
+                            <option value="Busy">Busy</option>
+                            <option value="Away">Away</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label small text-secondary">Default Status</label>
+                        <select id="settings-default-status" class="form-select bg-dark text-white border-secondary">
+                            <option value="Available">Available</option>
+                            <option value="Busy">Busy</option>
+                            <option value="Away">Away</option>
+                        </select>
+                    </div>
+                </div>
+
+                <hr class="border-secondary my-3">
+                <button id="logout-btn" class="btn btn-danger w-100" style="border-radius: 20px;">
+                    <i class="bi bi-box-arrow-right me-2"></i>Logout
+                </button>
+            </div>
+            <div class="modal-footer" style="border-top: 1px solid var(--border-color); background-color: var(--bg-sidebar);">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Password Change Confirmation Modal -->
+<div class="modal fade" id="pwChangeConfirmModal" tabindex="-1" aria-labelledby="pwChangeConfirmModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content bg-dark text-white shadow-lg" style="border: 1px solid var(--border-color); border-radius: 12px;">
+            <div class="modal-header" style="border-bottom: 1px solid var(--border-color); background-color: var(--bg-sidebar);">
+                <h5 class="modal-title" id="pwChangeConfirmModalLabel"><i class="bi bi-check-circle me-2 text-success"></i>Password Changed</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body text-center" style="background-color: var(--bg-dark);">
+                <i class="bi bi-shield-check text-success" style="font-size: 3rem;"></i>
+                <p class="mt-3 mb-0">Password changed successfully. You will be redirected to the login page to sign in again.</p>
+            </div>
+            <div class="modal-footer justify-content-center" style="border-top: 1px solid var(--border-color); background-color: var(--bg-sidebar);">
+                <button type="button" class="btn btn-primary px-4" id="pw-change-redirect-btn" style="border-radius: 20px;">Go to Login</button>
             </div>
         </div>
     </div>
@@ -1061,4 +1299,5 @@
 <script src="/static/js/socket.js?v=35"></script>
 <script src="/static/js/webrtc.js?v=35"></script>
 <script src="/static/js/app.js?v=35"></script>
+<script src="/static/js/settings.js?v=35"></script>
 {% endblock %}

@@ -10,6 +10,9 @@ class User(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     last_seen = db.Column(db.DateTime, nullable=True, default=datetime.utcnow)
     is_banned = db.Column(db.Boolean, default=False, nullable=False)
+    is_admin = db.Column(db.Boolean, default=False, nullable=False)
+    theme = db.Column(db.String(20), default='system')
+    default_status = db.Column(db.String(20), default='Available')
 
     def set_password(self, password):
         self.password_hash = generate_password_hash(password)
@@ -68,4 +71,12 @@ class SystemBroadcast(db.Model):
     message = db.Column(db.Text, nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     is_sent = db.Column(db.Boolean, default=False, nullable=False)
+
+
+class UsernameHistory(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, nullable=False, index=True)
+    previous_username = db.Column(db.String(80), nullable=False)
+    new_username = db.Column(db.String(80), nullable=False)
+    changed_at = db.Column(db.DateTime, default=datetime.utcnow)
 

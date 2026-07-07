@@ -1,0 +1,414 @@
+{% extends 'base.html' %}
+{% block content %}
+<style>
+.admin-container {
+  display: flex; min-height: 100vh; background: #0f1923; color: #e2e8f0;
+}
+.admin-sidebar {
+  width: min(220px, 30vw); min-width: 180px; background: #1a2332; padding: 1.5rem 0.75rem;
+  display: flex; flex-direction: column; border-right: 1px solid #2d3a4a;
+}
+.nav-btn {
+  display: flex; align-items: center; gap: 0.5rem; width: 100%; padding: 0.6rem 0.75rem;
+  border: none; background: transparent; color: #94a3b8; text-align: left;
+  border-radius: 0.5rem; transition: all 0.2s; font-size: 0.9rem; cursor: pointer;
+}
+.nav-btn:hover { background: #253244; color: #e2e8f0; }
+.nav-btn.active { background: #2563eb; color: #fff; }
+.admin-content {
+  flex: 1; padding: clamp(1rem, 2vw, 2rem); overflow-y: auto; max-width: 960px; min-width: 0;
+}
+.step-indicator {
+  display: flex; gap: 1rem; margin-bottom: 2rem; align-items: center;
+}
+.step {
+  display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem 1rem;
+  border-radius: 2rem; background: #1a2332; color: #64748b; font-size: 0.85rem;
+  border: 1px solid #2d3a4a;
+}
+.step.active { background: #2563eb; color: #fff; border-color: #2563eb; }
+.step.completed { background: #065f46; color: #6ee7b7; border-color: #059669; }
+.step-number {
+  width: 24px; height: 24px; display: flex; align-items: center; justify-content: center;
+  border-radius: 50%; background: rgba(255,255,255,0.15); font-size: 0.75rem; font-weight: 700;
+}
+.step.completed .step-number { background: rgba(255,255,255,0.2); }
+.upload-zone {
+  border: 2px dashed #2d3a4a; border-radius: 1rem; padding: 3rem 2rem;
+  text-align: center; transition: all 0.2s; cursor: pointer; background: #1a2332;
+}
+.upload-zone:hover, .upload-zone.dragover { border-color: #2563eb; background: #1e2a3a; }
+.upload-zone.has-file { border-color: #059669; background: #064e3b; }
+.card {
+  background: #1a2332; border: 1px solid #2d3a4a; border-radius: 0.75rem; padding: 1.25rem; margin-bottom: 1rem;
+}
+.stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(140px, 100%), 1fr)); gap: 0.75rem; margin-bottom: 1rem; }
+.stat-card {
+  background: #0f1923; border: 1px solid #2d3a4a; border-radius: 0.5rem; padding: 1rem; text-align: center;
+}
+.stat-card .value { font-size: 1.5rem; font-weight: 700; color: #60a5fa; }
+.stat-card .label { font-size: 0.75rem; color: #64748b; margin-top: 0.25rem; }
+.policy-select {
+  background: #0f1923; color: #e2e8f0; border: 1px solid #2d3a4a;
+  border-radius: 0.375rem; padding: 0.375rem 0.5rem; font-size: 0.85rem;
+}
+.progress-table { width: 100%; border-collapse: collapse; }
+.progress-table th { text-align: left; padding: 0.5rem; color: #64748b; font-size: 0.8rem; border-bottom: 1px solid #2d3a4a; }
+.progress-table td { padding: 0.5rem; border-bottom: 1px solid #1e2a3a; font-size: 0.9rem; }
+.badge-ok { display: inline-block; padding: 0.15rem 0.5rem; border-radius: 1rem; font-size: 0.75rem; background: #065f46; color: #6ee7b7; }
+.badge-warn { display: inline-block; padding: 0.15rem 0.5rem; border-radius: 1rem; font-size: 0.75rem; background: #78350f; color: #fbbf24; }
+.badge-err { display: inline-block; padding: 0.15rem 0.5rem; border-radius: 1rem; font-size: 0.75rem; background: #7f1d1d; color: #fca5a5; }
+.hash-display { font-family: monospace; font-size: 0.8rem; color: #94a3b8; word-break: break-all; }
+@media (max-width: 768px) {
+  .admin-container { flex-direction: column; }
+  .admin-sidebar { width: 100%; min-width: 0; flex-direction: row; flex-wrap: wrap; padding: 0.75rem; gap: 0.5rem; border-right: none; border-bottom: 1px solid #2d3a4a; }
+  .admin-sidebar .nav-btn { width: auto; padding: 0.4rem 0.6rem; font-size: 0.8rem; }
+  .admin-content { padding: 1rem; }
+  .step-indicator { flex-wrap: wrap; justify-content: center; gap: 0.5rem; }
+  .step { font-size: 0.75rem; padding: 0.3rem 0.6rem; }
+  .stat-grid { grid-template-columns: repeat(2, 1fr); }
+  .upload-zone { padding: 2rem 1rem; }
+  .progress-table { font-size: 0.8rem; }
+  .progress-table th, .progress-table td { padding: 0.3rem; }
+}
+</style>
+
+<div class="admin-container">
+  {% set sidebar_main_content %}
+    <a href="/admin/dashboard" class="nav-btn"><i class="bi bi-speedometer2"></i> Dashboard</a>
+  {% endset %}
+  {% set active_sidebar = 'db-import' %}
+  {% include 'admin/_sidebar.html' %}
+
+  <div class="admin-content">
+    <h4 class="mb-3"><i class="bi bi-database"></i> Database Import Wizard</h4>
+
+    <div class="step-indicator">
+      <div class="step active" id="step-1"><span class="step-number">1</span> Upload</div>
+      <div class="step" id="step-2"><span class="step-number">2</span> Preview</div>
+      <div class="step" id="step-3"><span class="step-number">3</span> Import</div>
+      <div class="step" id="step-4"><span class="step-number">4</span> Results</div>
+    </div>
+
+    <div id="step-1-content">
+      <p class="text-secondary mb-3">Upload a legacy SQLite database (.db) file to import its data into the current database.</p>
+      <div class="upload-zone" id="upload-zone">
+        <div id="upload-prompt">
+          <i class="bi bi-cloud-upload" style="font-size: 3rem; color: #2563eb;"></i>
+          <p class="mt-2 mb-1 fw-bold">Click to upload or drag and drop</p>
+          <p class="text-secondary small mb-0">Legacy SQLite database (.db) files only</p>
+        </div>
+        <div id="upload-progress" class="d-none">
+          <div class="spinner-border text-primary" role="status"></div>
+          <p class="mt-2 mb-0">Scanning database...</p>
+        </div>
+      </div>
+      <input type="file" id="file-input" accept=".db" class="d-none">
+      <div id="scan-results" class="d-none mt-3"></div>
+    </div>
+
+    <div id="step-2-content" class="d-none"></div>
+
+    <div id="step-3-content" class="d-none">
+      <p class="text-secondary mb-3">Import in progress. Do not close this page.</p>
+      <div class="card">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+          <span class="fw-bold">Overall Progress</span>
+          <span id="progress-pct" class="badge-ok">0%</span>
+        </div>
+        <div class="progress" style="height: 12px; background: #0f1923;">
+          <div id="progress-bar" class="progress-bar bg-primary" style="width: 0%; transition: width 0.5s;"></div>
+        </div>
+      </div>
+      <div class="card">
+        <table class="progress-table">
+          <thead><tr><th>Table</th><th>Status</th><th>Progress</th></tr></thead>
+          <tbody id="table-progress-body"></tbody>
+        </table>
+      </div>
+      <button id="cancel-btn" class="btn btn-outline-danger btn-sm mt-2"><i class="bi bi-x-circle"></i> Cancel Import</button>
+    </div>
+
+    <div id="step-4-content" class="d-none"></div>
+  </div>
+</div>
+
+<script>
+let uploadId = null;
+let importId = null;
+let pollTimer = null;
+
+document.getElementById('upload-zone').addEventListener('click', () => document.getElementById('file-input').click());
+document.getElementById('upload-zone').addEventListener('dragover', (e) => { e.preventDefault(); document.getElementById('upload-zone').classList.add('dragover'); });
+document.getElementById('upload-zone').addEventListener('dragleave', () => document.getElementById('upload-zone').classList.remove('dragover'));
+document.getElementById('upload-zone').addEventListener('drop', (e) => { e.preventDefault(); document.getElementById('upload-zone').classList.remove('dragover'); if(e.dataTransfer.files.length) handleFile(e.dataTransfer.files[0]); });
+document.getElementById('file-input').addEventListener('change', (e) => { if(e.target.files.length) handleFile(e.target.files[0]); });
+
+function handleFile(file) {
+  if(!file.name.endsWith('.db')) { showToast('Please select a .db file.', 'warning'); return; }
+  document.getElementById('upload-prompt').classList.add('d-none');
+  document.getElementById('upload-progress').classList.remove('d-none');
+  document.getElementById('upload-zone').classList.add('has-file');
+
+  const fd = new FormData();
+  fd.append('file', file);
+
+  fetch('/admin/api/db-import/scan', { method: 'POST', body: fd })
+    .then(r => r.json())
+    .then(resp => {
+      document.getElementById('upload-progress').classList.add('d-none');
+      if(!resp.success) { showToast(resp.error?.message || 'Scan failed', 'danger'); return; }
+      uploadId = resp.data.upload_id;
+      showScanResults(resp.data);
+    })
+    .catch(err => { document.getElementById('upload-progress').classList.add('d-none'); showToast('Upload error: ' + err.message, 'danger'); });
+}
+
+function showScanResults(data) {
+  const s = document.getElementById('scan-results');
+  s.classList.remove('d-none');
+  s.innerHTML = `
+    <div class="card">
+      <div class="stat-grid">
+        <div class="stat-card"><div class="value">${h(data.scan.version)}</div><div class="label">Version</div></div>
+        <div class="stat-card"><div class="value">${h(data.scan.total_rows)}</div><div class="label">Total Rows</div></div>
+        <div class="stat-card"><div class="value">${h(data.scan.tables)}</div><div class="label">Tables</div></div>
+      </div>
+    </div>
+    ${data.validation.issues.length ? `<div class="card"><h6>Validation Issues</h6>${data.validation.issues.map(i => `<div class="text-warning small mb-1"><span class="${i.severity === 'error' ? 'badge-err' : 'badge-warn'}">${h(i.severity)}</span> ${h(i.message)}</div>`).join('')}</div>` : '<div class="card"><span class="badge-ok">Schema validation passed</span></div>'}
+    <div class="card">
+      <h6>Conflict Preview</h6>
+      ${data.conflicts ? Object.entries(data.conflicts).map(([entity, info]) => `
+        <div class="d-flex justify-content-between align-items-center mb-2">
+          <span>${h(entity)}</span>
+          <span>${h(info.total_existing || 0)} existing · ${h(info.total_source || 0)} source · <span class="${info.total_conflicts > 0 ? 'badge-warn' : 'badge-ok'}">${h(info.total_conflicts)} conflicts</span></span>
+        </div>
+      `).join('') : '<p class="text-secondary small">No conflict data available.</p>'}
+    </div>
+    <button class="btn btn-primary" onclick="showPreview()"><i class="bi bi-arrow-right"></i> Configure Import</button>
+    <button class="btn btn-secondary ms-2" onclick="resetUpload()"><i class="bi bi-arrow-repeat"></i> Choose different file</button>
+  `;
+}
+
+function showPreview() {
+  document.getElementById('step-1').classList.replace('active', 'completed');
+  document.getElementById('step-2').classList.add('active');
+  document.getElementById('step-1-content').classList.add('d-none');
+  const c = document.getElementById('step-2-content');
+  c.classList.remove('d-none');
+  c.innerHTML = '<div class="text-center py-5"><div class="spinner-border text-primary"></div><p class="mt-2">Loading preview...</p></div>';
+
+  fetch('/admin/api/db-import/preview', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({upload_id: uploadId, policies: {}})
+  })
+  .then(r => r.json())
+  .then(resp => {
+    if(!resp.success) { showToast('Preview failed', 'danger'); return; }
+    c.innerHTML = buildPreviewUI(resp.data);
+  })
+  .catch(err => { c.innerHTML = '<div class="alert alert-danger">Error loading preview</div>'; });
+}
+
+function buildPreviewUI(data) {
+  const entities = [
+    {id: 'user', label: 'Users', policies: ['skip', 'rename', 'import_all']},
+    {id: 'message', label: 'Messages', policies: ['skip_duplicates', 'import_all', 'replace']},
+    {id: 'group', label: 'Groups', policies: ['skip', 'rename', 'merge', 'import_all']},
+    {id: 'group_member', label: 'Group Members', policies: ['import_all']},
+    {id: 'group_invite', label: 'Group Invites', policies: ['import_all']},
+    {id: 'group_join_request', label: 'Join Requests', policies: ['import_all']},
+    {id: 'system_broadcast', label: 'Broadcasts', policies: ['import_all']},
+  ];
+
+  let html = `<div class="card"><h6>Import Configuration</h6><p class="text-secondary small">Choose how conflicts should be resolved for each entity type.</p>`;
+  entities.forEach(e => {
+    const conflictInfo = data.conflicts?.[e.id];
+    const hasConflict = conflictInfo && conflictInfo > 0;
+    html += `
+      <div class="d-flex justify-content-between align-items-center mb-2 pb-2" style="border-bottom: 1px solid #1e2a3a;">
+        <div>
+          <span class="fw-bold">${e.label}</span>
+          ${hasConflict ? ` <span class="badge-warn">${conflictInfo} conflicts</span>` : ' <span class="badge-ok">No conflicts</span>'}
+        </div>
+        <div class="d-flex align-items-center gap-2">
+          <label class="small text-secondary">Enabled</label>
+          <input type="checkbox" class="form-check-input" id="enabled-${e.id}" checked onchange="toggleEntity('${e.id}')">
+          <label class="small text-secondary">Policy</label>
+          <select class="policy-select" id="policy-${e.id}">
+            ${e.policies.map(p => `<option value="${p}" ${p === 'skip' || p === 'skip_duplicates' || p === 'import_all' ? 'selected' : ''}>${p}</option>`).join('')}
+          </select>
+        </div>
+      </div>
+    `;
+  });
+  html += `<button class="btn btn-primary mt-2" onclick="startImport()"><i class="bi bi-play-fill"></i> Start Import</button></div>`;
+  return html;
+}
+
+function toggleEntity(entityId) {
+  const sel = document.getElementById('policy-' + entityId);
+  sel.disabled = !document.getElementById('enabled-' + entityId).checked;
+}
+
+function startImport() {
+  document.getElementById('step-2').classList.replace('active', 'completed');
+  document.getElementById('step-3').classList.add('active');
+  document.getElementById('step-2-content').classList.add('d-none');
+  document.getElementById('step-3-content').classList.remove('d-none');
+
+  const policies = {};
+  const enabled = {};
+  ['user','message','group','group_member','group_invite','group_join_request','system_broadcast'].forEach(e => {
+    policies[e] = document.getElementById('policy-' + e).value;
+    enabled[e] = document.getElementById('enabled-' + e).checked;
+  });
+
+  const tables = ['user','group','system_broadcast','group_member','group_invite','group_join_request','message'];
+  document.getElementById('table-progress-body').innerHTML = tables.map(t =>
+    `<tr id="tr-${t}"><td>${t}</td><td id="status-${t}"><span class="badge-warn">pending</span></td><td id="progress-${t}">0/0</td></tr>`
+  ).join('');
+
+  fetch('/admin/api/db-import/start', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({upload_id: uploadId, policies, enabled, default_password: 'password123'})
+  })
+  .then(r => r.json())
+  .then(resp => {
+    if(!resp.success) { showToast('Failed to start import: ' + (resp.error?.message || ''), 'danger'); return; }
+    importId = resp.data.import_id;
+    document.getElementById('cancel-btn').dataset.importId = importId;
+    pollStatus();
+  })
+  .catch(err => showToast('Error starting import', 'danger'));
+}
+
+function pollStatus() {
+  if(!importId) return;
+  fetch('/admin/api/db-import/status/' + importId)
+    .then(r => r.json())
+    .then(resp => {
+      if(!resp.success || !resp.data) return;
+      const d = resp.data;
+      document.getElementById('progress-pct').textContent = d.progress_pct + '%';
+      document.getElementById('progress-bar').style.width = d.progress_pct + '%';
+
+      if(d.tables) {
+        Object.entries(d.tables).forEach(([t, info]) => {
+          const td = document.getElementById('status-' + t);
+          if(td) {
+            if(info.status === 'completed') td.innerHTML = '<span class="badge-ok">completed</span>';
+            else if(info.status === 'failed') td.innerHTML = '<span class="badge-err">failed</span>';
+            else if(info.status === 'in_progress') td.innerHTML = '<span class="badge-warn">in progress</span>';
+            else if(info.status === 'skipped') td.innerHTML = '<span class="text-secondary">skipped</span>';
+            else td.innerHTML = '<span class="badge-warn">pending</span>';
+          }
+          const p = document.getElementById('progress-' + t);
+          if(p) p.textContent = (info.current || 0) + '/' + (info.total || 0);
+        });
+      }
+
+      if(d.status === 'completed' || d.status === 'failed' || d.status === 'cancelled') {
+        showResult(d);
+        return;
+      }
+      pollTimer = setTimeout(pollStatus, 1000);
+    })
+    .catch(() => { pollTimer = setTimeout(pollStatus, 2000); });
+}
+
+document.getElementById('cancel-btn').addEventListener('click', function() {
+  const id = this.dataset.importId;
+  if(!id) return;
+  fetch('/admin/api/db-import/cancel/' + id, {method: 'POST'})
+    .then(r => r.json())
+    .then(resp => {
+      if(resp.success) showToast('Cancellation requested', 'warning');
+    });
+});
+
+function showResult(data) {
+  if(pollTimer) { clearTimeout(pollTimer); pollTimer = null; }
+  document.getElementById('step-3').classList.replace('active', 'completed');
+  document.getElementById('step-4').classList.add('active');
+  document.getElementById('step-3-content').classList.add('d-none');
+  const c = document.getElementById('step-4-content');
+  c.classList.remove('d-none');
+
+  const statusColor = data.status === 'completed' ? 'badge-ok' : data.status === 'failed' ? 'badge-err' : 'badge-warn';
+  const results = data.results || {};
+  const totalImported = Object.values(results).reduce((s, r) => s + (r.imported || 0), 0);
+  const totalSkipped = Object.values(results).reduce((s, r) => s + (r.skipped || 0), 0);
+  const totalReplaced = Object.values(results).reduce((s, r) => s + (r.replaced || 0), 0);
+
+  let html = `
+    <div class="card">
+      <h6>Import <span class="${statusColor}">${h(data.status)}</span></h6>
+      <div class="stat-grid">
+        <div class="stat-card"><div class="value">${totalImported}</div><div class="label">Imported</div></div>
+        <div class="stat-card"><div class="value">${totalSkipped}</div><div class="label">Skipped</div></div>
+        <div class="stat-card"><div class="value">${totalReplaced}</div><div class="label">Replaced</div></div>
+      </div>
+    </div>`;
+
+  if(data.pre_import_backup && data.pre_import_backup.path) {
+    html += `<div class="card"><h6>Pre-Import Backup</h6><p class="small text-secondary mb-1">Path: ${h(data.pre_import_backup.path)}</p>`;
+    if(data.pre_import_backup.sha256) html += `<p class="hash-display mb-0">SHA256: ${h(data.pre_import_backup.sha256)}</p>`;
+    html += `</div>`;
+  }
+
+  if(data.results) {
+    html += `<div class="card"><h6>Per-Table Results</h6><table class="progress-table"><thead><tr><th>Table</th><th>Imported</th><th>Skipped</th><th>Replaced</th><th>Total</th></tr></thead><tbody>`;
+    Object.entries(data.results).forEach(([t, r]) => {
+      html += `<tr><td>${h(t)}</td><td>${r.imported || 0}</td><td>${r.skipped || 0}</td><td>${r.replaced || 0}</td><td>${r.total || 0}</td></tr>`;
+    });
+    html += `</tbody></table></div>`;
+  }
+
+  if(data.error) {
+    html += `<div class="card"><h6 class="text-danger">Error</h6><p class="text-danger small">${h(data.error)}</p></div>`;
+  }
+
+  html += `<button class="btn btn-secondary mt-2" onclick="resetUpload()"><i class="bi bi-arrow-repeat"></i> New Import</button>`;
+  c.innerHTML = html;
+}
+
+function resetUpload() {
+  if(pollTimer) { clearTimeout(pollTimer); pollTimer = null; }
+  uploadId = null; importId = null;
+  [1,2,3,4].forEach(i => {
+    document.getElementById('step-' + i).className = 'step' + (i === 1 ? ' active' : '');
+  });
+  [1,2,3,4].forEach(i => {
+    const el = document.getElementById('step-' + i + '-content');
+    if(el) el.classList.add('d-none');
+  });
+  document.getElementById('step-1-content').classList.remove('d-none');
+  document.getElementById('scan-results').classList.add('d-none');
+  document.getElementById('scan-results').innerHTML = '';
+  document.getElementById('upload-prompt').classList.remove('d-none');
+  document.getElementById('upload-zone').classList.remove('has-file');
+  document.getElementById('file-input').value = '';
+}
+
+function h(s) { if(s === null || s === undefined) return ''; return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+function showToast(msg, type) {
+  const c = document.getElementById('toast-container');
+  const t = document.createElement('div');
+  t.className = 'toast align-items-center text-bg-' + (type || 'info') + ' border-0';
+  t.innerHTML = '<div class="d-flex"><div class="toast-body">' + h(msg) + '</div><button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button></div>';
+  c.appendChild(t);
+  if(typeof bootstrap !== 'undefined' && bootstrap.Toast) {
+    const bsToast = new bootstrap.Toast(t);
+    bsToast.show();
+    t.addEventListener('hidden.bs.toast', () => t.remove());
+  } else {
+    t.classList.add('show');
+    setTimeout(() => { t.remove(); }, 5000);
+  }
+}
+</script>
+{% endblock %}

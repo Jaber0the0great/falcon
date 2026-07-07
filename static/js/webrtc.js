@@ -24,8 +24,8 @@ class WebRTCManager {
         try {
             const res = await fetch('/api/webrtc_config');
             const data = await res.json();
-            if(data.success && data.iceServers) {
-                this.config = { 'iceServers': data.iceServers };
+            if(data.success && data.data.iceServers) {
+                this.config = { 'iceServers': data.data.iceServers };
                 console.log("Loaded WebRTC ICE configuration:", this.config);
             }
         } catch(e) {
@@ -746,7 +746,7 @@ class WebRTCManager {
             });
             const data = await res.json();
             if (data.success) {
-                console.log("[DEBUG CALL LOG] Call log saved successfully:", data.message);
+                console.log("[DEBUG CALL LOG] Call log saved successfully:", data.data.message);
             }
         } catch(e) {
             console.error("[DEBUG CALL LOG] Failed to save call log:", e);

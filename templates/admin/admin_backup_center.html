@@ -1,0 +1,491 @@
+{% extends 'base.html' %}
+{% block content %}
+<style>
+.admin-container {
+  display: flex; min-height: 100vh; background: #0f1923; color: #e2e8f0;
+}
+.admin-sidebar {
+  width: min(220px, 30vw); min-width: 180px; background: #1a2332; padding: 1.5rem 0.75rem;
+  display: flex; flex-direction: column; border-right: 1px solid #2d3a4a;
+}
+.nav-btn {
+  display: flex; align-items: center; gap: 0.5rem; width: 100%; padding: 0.6rem 0.75rem;
+  border: none; background: transparent; color: #94a3b8; text-align: left;
+  border-radius: 0.5rem; transition: all 0.2s; font-size: 0.9rem; cursor: pointer;
+}
+.nav-btn:hover { background: #253244; color: #e2e8f0; }
+.nav-btn.active { background: #2563eb; color: #fff; }
+.admin-content {
+  flex: 1; padding: clamp(1rem, 2vw, 2rem); overflow-y: auto; max-width: 1100px; min-width: 0;
+}
+.tab-bar {
+  display: flex; gap: 0; margin-bottom: 1.5rem; border-bottom: 1px solid #2d3a4a;
+}
+.tab-btn {
+  padding: 0.6rem 1.25rem; background: transparent; border: none; color: #64748b;
+  cursor: pointer; font-size: 0.9rem; border-bottom: 2px solid transparent;
+  transition: all 0.2s;
+}
+.tab-btn:hover { color: #e2e8f0; }
+.tab-btn.active { color: #60a5fa; border-bottom-color: #2563eb; }
+.card {
+  background: #1a2332; border: 1px solid #2d3a4a; border-radius: 0.75rem; padding: 1.25rem; margin-bottom: 1rem;
+}
+.stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(140px, 100%), 1fr)); gap: 0.75rem; margin-bottom: 1rem; }
+.stat-card {
+  background: #0f1923; border: 1px solid #2d3a4a; border-radius: 0.5rem; padding: 1rem; text-align: center;
+}
+.stat-card .value { font-size: 1.5rem; font-weight: 700; color: #60a5fa; }
+.stat-card .label { font-size: 0.75rem; color: #64748b; margin-top: 0.25rem; }
+.backup-table { width: 100%; border-collapse: collapse; }
+.backup-table th { text-align: left; padding: 0.6rem 0.5rem; color: #64748b; font-size: 0.8rem; border-bottom: 1px solid #2d3a4a; }
+.backup-table td { padding: 0.5rem; border-bottom: 1px solid #1e2a3a; font-size: 0.85rem; }
+.badge-ok { display: inline-block; padding: 0.15rem 0.5rem; border-radius: 1rem; font-size: 0.75rem; background: #065f46; color: #6ee7b7; }
+.badge-warn { display: inline-block; padding: 0.15rem 0.5rem; border-radius: 1rem; font-size: 0.75rem; background: #78350f; color: #fbbf24; }
+.badge-err { display: inline-block; padding: 0.15rem 0.5rem; border-radius: 1rem; font-size: 0.75rem; background: #7f1d1d; color: #fca5a5; }
+.badge-info { display: inline-block; padding: 0.15rem 0.5rem; border-radius: 1rem; font-size: 0.75rem; background: #1e3a5f; color: #93c5fd; }
+.search-input {
+  background: #0f1923; color: #e2e8f0; border: 1px solid #2d3a4a;
+  border-radius: 0.375rem; padding: 0.5rem 0.75rem; font-size: 0.85rem; width: 100%;
+}
+.type-filter { background: #0f1923; color: #e2e8f0; border: 1px solid #2d3a4a; border-radius: 0.375rem; padding: 0.375rem 0.5rem; font-size: 0.85rem; }
+.hash-display { font-family: monospace; font-size: 0.8rem; color: #94a3b8; word-break: break-all; }
+.action-btn {
+  padding: 0.25rem 0.6rem; border-radius: 0.25rem; border: 1px solid #2d3a4a;
+  background: transparent; color: #94a3b8; font-size: 0.8rem; cursor: pointer; transition: all 0.2s;
+}
+.action-btn:hover { background: #253244; color: #e2e8f0; }
+.action-btn.danger:hover { background: #7f1d1d; color: #fca5a5; border-color: #991b1b; }
+.action-btn.primary:hover { background: #1e3a5f; color: #93c5fd; border-color: #2563eb; }
+.modal-overlay {
+  position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+  background: rgba(0,0,0,0.7); z-index: 1060; display: flex;
+  align-items: center; justify-content: center;
+}
+.modal-box {
+  background: #1a2332; border: 1px solid #2d3a4a; border-radius: 0.75rem;
+  padding: 1.5rem; max-width: 500px; width: 90%;
+  max-height: 90dvh; overflow-y: auto;
+}
+@media (max-width: 768px) {
+  .admin-container { flex-direction: column; }
+  .admin-sidebar { width: 100%; min-width: 0; flex-direction: row; flex-wrap: wrap; padding: 0.75rem; gap: 0.5rem; border-right: none; border-bottom: 1px solid #2d3a4a; }
+  .admin-sidebar .nav-btn { width: auto; padding: 0.4rem 0.6rem; font-size: 0.8rem; }
+  .admin-content { padding: 1rem; }
+  .tab-bar { flex-wrap: wrap; }
+  .tab-btn { padding: 0.4rem 0.8rem; font-size: 0.8rem; }
+  .stat-grid { grid-template-columns: repeat(2, 1fr); }
+  .backup-table { font-size: 0.8rem; }
+  .backup-table th, .backup-table td { padding: 0.3rem; white-space: nowrap; }
+  .card { overflow-x: auto; }
+}
+</style>
+
+<div class="admin-container">
+  {% set sidebar_main_content %}
+    <a href="/admin/dashboard" class="nav-btn"><i class="bi bi-speedometer2"></i> Dashboard</a>
+    <a href="/admin/db-import" class="nav-btn"><i class="bi bi-database"></i> DB Import</a>
+  {% endset %}
+  {% set active_sidebar = 'backup-center' %}
+  {% include 'admin/_sidebar.html' %}
+
+  <div class="admin-content">
+    <h4 class="mb-3"><i class="bi bi-shield-check"></i> Backup & Restore Center</h4>
+
+    <div class="tab-bar">
+      <button class="tab-btn active" data-tab="create" onclick="switchTab('create')">Create</button>
+      <button class="tab-btn" data-tab="history" onclick="switchTab('history')">Backup History</button>
+      <button class="tab-btn" data-tab="imports" onclick="switchTab('imports')">Import History</button>
+    </div>
+
+    <div id="tab-create" class="tab-content">
+      <div class="card">
+        <h6>Create Backup</h6>
+        <p class="text-secondary small mb-3">Choose a backup type. Quick backups capture only the database. Full backups include uploaded files.</p>
+        <div class="d-flex gap-3 mb-3">
+          <button class="btn btn-primary" onclick="createQuick()"><i class="bi bi-database"></i> Create Quick Backup</button>
+          <button class="btn btn-primary" onclick="createFull()"><i class="bi bi-archive"></i> Create Full Backup</button>
+          <button class="btn btn-success" onclick="exportDb()"><i class="bi bi-download"></i> Export Database</button>
+        </div>
+        <div id="create-status" class="d-none"></div>
+      </div>
+
+      <div class="card">
+        <h6>Storage Summary</h6>
+        <div id="summary-stats" class="stat-grid">
+          <div class="stat-card"><div class="value">-</div><div class="label">Total Backups</div></div>
+          <div class="stat-card"><div class="value">-</div><div class="label">Quick</div></div>
+          <div class="stat-card"><div class="value">-</div><div class="label">Full</div></div>
+          <div class="stat-card"><div class="value">-</div><div class="label">Pre-Import</div></div>
+          <div class="stat-card"><div class="value">-</div><div class="label">Total Size</div></div>
+        </div>
+      </div>
+    </div>
+
+    <div id="tab-history" class="tab-content d-none">
+      <div class="card">
+        <div class="d-flex gap-2 mb-3">
+          <input type="text" class="search-input" id="history-search" placeholder="Search backups..." oninput="searchBackups()">
+          <select class="type-filter" id="type-filter" onchange="loadHistory()">
+            <option value="">All types</option>
+            <option value="quick">Quick</option>
+            <option value="full">Full</option>
+            <option value="pre_import">Pre-Import</option>
+          </select>
+          <button class="action-btn primary" onclick="loadHistory()"><i class="bi bi-arrow-repeat"></i></button>
+        </div>
+        <div id="history-loading" class="text-center py-3 d-none"><div class="spinner-border spinner-border-sm text-primary"></div> Loading...</div>
+        <div id="history-empty" class="text-center py-4 text-secondary d-none">No backups found.</div>
+        <table class="backup-table" id="history-table">
+          <thead><tr><th>Type</th><th>Filename</th><th>Size</th><th>Created</th><th>SHA256</th><th>Actions</th></tr></thead>
+          <tbody id="history-body"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div id="tab-imports" class="tab-content d-none">
+      <div class="card">
+        <div id="imports-loading" class="text-center py-3 d-none"><div class="spinner-border spinner-border-sm text-primary"></div> Loading...</div>
+        <div id="imports-empty" class="text-center py-4 text-secondary d-none">No imports found.</div>
+        <table class="backup-table" id="imports-table">
+          <thead><tr><th>Import ID</th><th>Date</th><th>Status</th><th>Imported</th><th>Skipped</th><th>Replaced</th><th>Error</th></tr></thead>
+          <tbody id="imports-body"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="modal-overlay" class="modal-overlay d-none">
+  <div class="modal-box" id="modal-content"></div>
+</div>
+
+<script>
+let currentTab = 'create';
+
+document.addEventListener('DOMContentLoaded', () => {
+  loadSummary();
+  loadHistory();
+  loadImportHistory();
+});
+
+function switchTab(tab) {
+  currentTab = tab;
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
+  document.querySelectorAll('.tab-content').forEach(c => c.classList.add('d-none'));
+  document.getElementById('tab-' + tab).classList.remove('d-none');
+}
+
+function h(s) { if(s === null || s === undefined) return ''; return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+function fmtSize(bytes) {
+  if (!bytes) return '0 B';
+  const units = ['B', 'KB', 'MB', 'GB'];
+  let i = 0; let size = bytes;
+  while (size >= 1024 && i < units.length - 1) { size /= 1024; i++; }
+  return size.toFixed(i > 0 ? 1 : 0) + ' ' + units[i];
+}
+
+function fmtTime(iso) {
+  if (!iso) return '-';
+  try { return new Date(iso).toLocaleString(); } catch(e) { return iso; }
+}
+
+function showToast(msg, type) {
+  const c = document.getElementById('toast-container');
+  const t = document.createElement('div');
+  t.className = 'toast align-items-center text-bg-' + (type || 'info') + ' border-0 show';
+  t.innerHTML = '<div class="d-flex"><div class="toast-body">' + h(msg) + '</div><button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button></div>';
+  c.appendChild(t);
+  setTimeout(() => t.remove(), 5000);
+}
+
+function autoDownload(filename) {
+  window.location.href = '/admin/api/backup-center/download?filename=' + encodeURIComponent(filename);
+}
+
+function createQuick() {
+  const status = document.getElementById('create-status');
+  status.classList.remove('d-none', 'alert', 'alert-danger', 'alert-success');
+  status.innerHTML = '<div class="spinner-border spinner-border-sm text-primary"></div> Creating quick backup...';
+  fetch('/admin/api/backup-center/create-quick', {method: 'POST'})
+    .then(r => r.json())
+    .then(resp => {
+      if (resp.success) {
+        status.className = 'alert alert-success mt-2';
+        status.innerHTML = '<i class="bi bi-check-circle"></i> Quick backup created: ' + h(resp.data.filename) + ' (' + fmtSize(resp.data.size) + ')';
+        autoDownload(resp.data.filename);
+        loadHistory(); loadSummary();
+      } else {
+        status.className = 'alert alert-danger mt-2';
+        status.innerHTML = '<i class="bi bi-exclamation-triangle"></i> ' + h(resp.error?.message || 'Failed');
+      }
+    })
+    .catch(err => { status.className = 'alert alert-danger mt-2'; status.innerHTML = '<i class="bi bi-exclamation-triangle"></i> ' + h(err.message); });
+}
+
+function createFull() {
+  const status = document.getElementById('create-status');
+  status.classList.remove('d-none', 'alert', 'alert-danger', 'alert-success');
+  status.innerHTML = '<div class="spinner-border spinner-border-sm text-primary"></div> Creating full backup...';
+  fetch('/admin/api/backup-center/create-full', {method: 'POST'})
+    .then(r => r.json())
+    .then(resp => {
+      if (resp.success) {
+        status.className = 'alert alert-success mt-2';
+        status.innerHTML = '<i class="bi bi-check-circle"></i> Full backup created: ' + h(resp.data.filename) + ' (' + fmtSize(resp.data.size) + ')';
+        autoDownload(resp.data.filename);
+        loadHistory(); loadSummary();
+      } else {
+        status.className = 'alert alert-danger mt-2';
+        status.innerHTML = '<i class="bi bi-exclamation-triangle"></i> ' + h(resp.error?.message || 'Failed');
+      }
+    })
+    .catch(err => { status.className = 'alert alert-danger mt-2'; status.innerHTML = '<i class="bi bi-exclamation-triangle"></i> ' + h(err.message); });
+}
+
+function exportDb() {
+  const status = document.getElementById('create-status');
+  status.classList.remove('d-none');
+  status.innerHTML = '<div class="spinner-border spinner-border-sm text-primary"></div> Exporting database...';
+  fetch('/admin/api/backup-center/create-quick', {method: 'POST'})
+    .then(r => r.json())
+    .then(resp => {
+      if (resp.success) {
+        status.innerHTML = '<span class="text-success"><i class="bi bi-check-circle"></i> Downloading...</span>';
+        autoDownload(resp.data.filename);
+        loadHistory(); loadSummary();
+      } else {
+        status.innerHTML = '<span class="text-danger"><i class="bi bi-exclamation-triangle"></i> ' + h(resp.error?.message || 'Failed') + '</span>';
+      }
+    })
+    .catch(err => { status.innerHTML = '<span class="text-danger"><i class="bi bi-exclamation-triangle"></i> ' + h(err.message) + '</span>'; });
+}
+
+function loadSummary() {
+  fetch('/admin/api/backup-center/summary')
+    .then(r => r.json())
+    .then(resp => {
+      if (!resp.success) return;
+      const d = resp.data;
+      const byType = d.by_type || {};
+      document.getElementById('summary-stats').innerHTML = `
+        <div class="stat-card"><div class="value">${d.total || 0}</div><div class="label">Total Backups</div></div>
+        <div class="stat-card"><div class="value">${(byType.quick?.count || 0)}</div><div class="label">Quick</div></div>
+        <div class="stat-card"><div class="value">${(byType.full?.count || 0)}</div><div class="label">Full</div></div>
+        <div class="stat-card"><div class="value">${(byType.pre_import?.count || 0)}</div><div class="label">Pre-Import</div></div>
+        <div class="stat-card"><div class="value">${fmtSize(d.total_size_bytes)}</div><div class="label">Total Size</div></div>
+      `;
+    });
+}
+
+function loadHistory() {
+  const tbody = document.getElementById('history-body');
+  const loading = document.getElementById('history-loading');
+  const empty = document.getElementById('history-empty');
+  const typeFilter = document.getElementById('type-filter').value;
+
+  tbody.innerHTML = '';
+  loading.classList.remove('d-none');
+  empty.classList.add('d-none');
+
+  let url = '/admin/api/backup-center/list';
+  if (typeFilter) url += '?type=' + typeFilter;
+
+  fetch(url)
+    .then(r => r.json())
+    .then(resp => {
+      loading.classList.add('d-none');
+      if (!resp.success || !resp.data?.backups?.length) { empty.classList.remove('d-none'); return; }
+      resp.data.backups.forEach(b => {
+        const type = b.type || 'unknown';
+        const typeClass = type === 'quick' ? 'badge-info' : type === 'full' ? 'badge-ok' : type === 'pre_import' ? 'badge-warn' : 'badge-err';
+        const fn = h(b.filename);
+        const sha = b.sha256 ? b.sha256.substring(0, 16) + '...' : '-';
+        const mtime = fmtTime(b.mtime);
+        tbody.innerHTML += `
+          <tr>
+            <td><span class="${typeClass}">${h(type)}</span></td>
+            <td title="${fn}">${fn.length > 40 ? fn.substring(0, 37) + '...' : fn}</td>
+            <td>${fmtSize(b.size)}</td>
+            <td>${mtime}</td>
+            <td class="hash-display">${sha}</td>
+            <td>
+              <button class="action-btn primary" onclick="downloadBackup('${encodeURIComponent(b.filename)}')" title="Download"><i class="bi bi-download"></i></button>
+              <button class="action-btn" onclick="verifyBackup('${encodeURIComponent(b.filename)}')" title="Verify"><i class="bi bi-shield-check"></i></button>
+              <button class="action-btn primary" onclick="showRestoreModal('${encodeURIComponent(b.filename)}')" title="Restore"><i class="bi bi-arrow-counterclockwise"></i></button>
+              <button class="action-btn danger" onclick="deleteBackup('${encodeURIComponent(b.filename)}')" title="Delete"><i class="bi bi-trash"></i></button>
+            </td>
+          </tr>`;
+      });
+    })
+    .catch(() => { loading.classList.add('d-none'); });
+}
+
+function searchBackups() {
+  const q = document.getElementById('history-search').value;
+  if (!q) { loadHistory(); return; }
+
+  const tbody = document.getElementById('history-body');
+  const loading = document.getElementById('history-loading');
+  const empty = document.getElementById('history-empty');
+  tbody.innerHTML = '';
+  loading.classList.remove('d-none');
+  empty.classList.add('d-none');
+
+  fetch('/admin/api/backup-center/search?q=' + encodeURIComponent(q))
+    .then(r => r.json())
+    .then(resp => {
+      loading.classList.add('d-none');
+      if (!resp.success || !resp.data?.results?.length) { empty.classList.remove('d-none'); return; }
+      resp.data.results.forEach(b => {
+        const type = b.type || 'unknown';
+        const typeClass = type === 'quick' ? 'badge-info' : type === 'full' ? 'badge-ok' : type === 'pre_import' ? 'badge-warn' : 'badge-err';
+        tbody.innerHTML += `
+          <tr>
+            <td><span class="${typeClass}">${h(type)}</span></td>
+            <td>${h(b.filename)}</td>
+            <td>${fmtSize(b.size)}</td>
+            <td>${fmtTime(b.mtime)}</td>
+            <td class="hash-display">${b.sha256 ? b.sha256.substring(0, 16) + '...' : '-'}</td>
+            <td>
+              <button class="action-btn primary" onclick="downloadBackup('${encodeURIComponent(b.filename)}')"><i class="bi bi-download"></i></button>
+              <button class="action-btn" onclick="verifyBackup('${encodeURIComponent(b.filename)}')"><i class="bi bi-shield-check"></i></button>
+              <button class="action-btn primary" onclick="showRestoreModal('${encodeURIComponent(b.filename)}')"><i class="bi bi-arrow-counterclockwise"></i></button>
+              <button class="action-btn danger" onclick="deleteBackup('${encodeURIComponent(b.filename)}')"><i class="bi bi-trash"></i></button>
+            </td>
+          </tr>`;
+      });
+    })
+    .catch(() => { loading.classList.add('d-none'); });
+}
+
+function downloadBackup(filename) {
+  window.location.href = '/admin/api/backup-center/download?filename=' + filename;
+}
+
+function verifyBackup(filename) {
+  fetch('/admin/api/backup-center/verify?filename=' + filename)
+    .then(r => r.json())
+    .then(resp => {
+      if (resp.success) {
+        const v = resp.data;
+        showToast('SHA256: ' + (v.match ? 'Match' : 'MISMATCH') + ' | Actual: ' + (v.sha256_actual || 'N/A'), v.match ? 'success' : 'danger');
+      } else {
+        showToast(resp.error?.message || 'Verification failed', 'danger');
+      }
+    });
+}
+
+function showRestoreModal(filename) {
+  const overlay = document.getElementById('modal-overlay');
+  const content = document.getElementById('modal-content');
+  overlay.classList.remove('d-none');
+  content.innerHTML = `
+    <h6>Restore from Backup</h6>
+    <p class="text-warning small"><i class="bi bi-exclamation-triangle"></i> This will replace the current database and uploaded files. A pre-restore backup will be created automatically.</p>
+    <p class="text-secondary small">Backup: ${h(decodeURIComponent(filename))}</p>
+    <div class="form-check mb-2">
+      <input type="checkbox" class="form-check-input" id="restore-confirm-check">
+      <label class="form-check-label small">I understand this action will overwrite current data</label>
+    </div>
+    <div class="mb-2">
+      <label class="small text-secondary">Type RESTORE to confirm:</label>
+      <input type="text" class="form-control form-control-sm bg-dark text-light border-secondary" id="restore-confirm-text" style="font-size:0.85rem;">
+    </div>
+    <div id="restore-status" class="small mb-2"></div>
+    <div class="d-flex justify-content-end gap-2">
+      <button class="btn btn-sm btn-secondary" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-sm btn-danger" id="restore-btn" disabled onclick="executeRestore('${filename}')">Restore</button>
+    </div>
+  `;
+  const check = document.getElementById('restore-confirm-check');
+  const text = document.getElementById('restore-confirm-text');
+  const btn = document.getElementById('restore-btn');
+  function checkRestoreReady() {
+    btn.disabled = !(check.checked && text.value === 'RESTORE');
+  }
+  check.addEventListener('change', checkRestoreReady);
+  text.addEventListener('input', checkRestoreReady);
+}
+
+function executeRestore(filename) {
+  const status = document.getElementById('restore-status');
+  const btn = document.getElementById('restore-btn');
+  btn.disabled = true;
+  status.innerHTML = '<div class="spinner-border spinner-border-sm text-primary"></div> Restoring...';
+  fetch('/admin/api/backup-center/restore', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({filename: decodeURIComponent(filename)})
+  })
+    .then(r => r.json())
+    .then(resp => {
+      if (resp.success) {
+        status.className = 'text-success';
+        const v = resp.data.verification || {};
+        let msg = 'Restore completed successfully.';
+        if (v.all_ok) msg += ' Verification passed.';
+        else msg += ' Some checks ' + (v.integrity?.ok ? '' : '(integrity) ') + 'failed.';
+        status.innerHTML = '<i class="bi bi-check-circle"></i> ' + msg;
+        setTimeout(closeModal, 3000);
+        loadSummary();
+      } else {
+        status.className = 'text-danger';
+        status.innerHTML = '<i class="bi bi-exclamation-triangle"></i> ' + h(resp.error?.message || 'Restore failed');
+        btn.disabled = false;
+      }
+    })
+    .catch(err => { status.className = 'text-danger'; status.innerHTML = h(err.message); });
+}
+
+function deleteBackup(filename) {
+  if (!confirm('Delete this backup? This cannot be undone.')) return;
+  fetch('/admin/api/backup-center/delete', {
+    method: 'DELETE',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({filename: decodeURIComponent(filename)})
+  })
+    .then(r => r.json())
+    .then(resp => {
+      if (resp.success) { showToast('Deleted', 'success'); loadHistory(); loadSummary(); }
+      else { showToast(resp.error?.message || 'Delete failed', 'danger'); }
+    });
+}
+
+function closeModal() {
+  document.getElementById('modal-overlay').classList.add('d-none');
+}
+
+function loadImportHistory() {
+  const tbody = document.getElementById('imports-body');
+  const loading = document.getElementById('imports-loading');
+  const empty = document.getElementById('imports-empty');
+  tbody.innerHTML = '';
+  loading.classList.remove('d-none');
+  empty.classList.add('d-none');
+
+  fetch('/admin/api/backup-center/import-history')
+    .then(r => r.json())
+    .then(resp => {
+      loading.classList.add('d-none');
+      if (!resp.success || !resp.data?.imports?.length) { empty.classList.remove('d-none'); return; }
+      resp.data.imports.forEach(imp => {
+        const statusClass = imp.status === 'completed' ? 'badge-ok' : imp.status === 'failed' ? 'badge-err' : imp.status === 'cancelled' ? 'badge-warn' : 'badge-info';
+        const s = imp.summary || {};
+        tbody.innerHTML += `
+          <tr>
+            <td class="hash-display">${h(imp.import_id)}</td>
+            <td>${fmtTime(imp.timestamp)}</td>
+            <td><span class="${statusClass}">${h(imp.status)}</span></td>
+            <td>${s.total_imported || 0}</td>
+            <td>${s.total_skipped || 0}</td>
+            <td>${s.total_replaced || 0}</td>
+            <td class="text-danger small">${imp.error ? h(imp.error) : '-'}</td>
+          </tr>`;
+      });
+    })
+    .catch(() => { loading.classList.add('d-none'); });
+}
+</script>
+{% endblock %}

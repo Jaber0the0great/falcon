@@ -1,0 +1,73 @@
+from enum import Enum
+
+
+class ErrorCategory(str, Enum):
+    AUTH = "AUTH"
+    VALIDATION = "VALIDATION"
+    GROUP = "GROUP"
+    MESSAGE = "MESSAGE"
+    FILE = "FILE"
+    ADMIN = "ADMIN"
+    RATE_LIMIT = "RATE_LIMIT"
+    SERVER = "SERVER"
+
+
+class ErrorCode:
+    # ── Auth ──────────────────────────────────────────────────────────
+    AUTH_INVALID_CREDENTIALS = ("AUTH_INVALID_CREDENTIALS", ErrorCategory.AUTH, 401)
+    AUTH_ACCOUNT_BANNED = ("AUTH_ACCOUNT_BANNED", ErrorCategory.AUTH, 401)
+    AUTH_USERNAME_EXISTS = ("AUTH_USERNAME_EXISTS", ErrorCategory.AUTH, 409)
+    AUTH_BANNED = ("AUTH_BANNED", ErrorCategory.AUTH, 403)
+    AUTH_NOT_AUTHENTICATED = ("AUTH_NOT_AUTHENTICATED", ErrorCategory.AUTH, 401)
+    AUTH_NOT_ADMIN = ("AUTH_NOT_ADMIN", ErrorCategory.AUTH, 403)
+    AUTH_SESSION_EXPIRED = ("AUTH_SESSION_EXPIRED", ErrorCategory.AUTH, 401)
+    AUTH_LOGOUT_FAILED = ("AUTH_LOGOUT_FAILED", ErrorCategory.AUTH, 400)
+
+    # ── Validation ────────────────────────────────────────────────────
+    VALIDATION_MISSING_FIELD = ("VALIDATION_MISSING_FIELD", ErrorCategory.VALIDATION, 400)
+    VALIDATION_INVALID_USERNAME = ("VALIDATION_INVALID_USERNAME", ErrorCategory.VALIDATION, 400)
+    VALIDATION_INVALID_PASSWORD = ("VALIDATION_INVALID_PASSWORD", ErrorCategory.VALIDATION, 400)
+    VALIDATION_INVALID_GROUP_NAME = ("VALIDATION_INVALID_GROUP_NAME", ErrorCategory.VALIDATION, 400)
+    VALIDATION_INVALID_INPUT = ("VALIDATION_INVALID_INPUT", ErrorCategory.VALIDATION, 400)
+    VALIDATION_INVALID_TARGET = ("VALIDATION_INVALID_TARGET", ErrorCategory.VALIDATION, 400)
+
+    # ── Group ─────────────────────────────────────────────────────────
+    GROUP_NOT_FOUND = ("GROUP_NOT_FOUND", ErrorCategory.GROUP, 404)
+    GROUP_NOT_MEMBER = ("GROUP_NOT_MEMBER", ErrorCategory.GROUP, 403)
+    GROUP_ALREADY_MEMBER = ("GROUP_ALREADY_MEMBER", ErrorCategory.GROUP, 409)
+    GROUP_INVITE_FAILED = ("GROUP_INVITE_FAILED", ErrorCategory.GROUP, 400)
+    GROUP_CREATE_FAILED = ("GROUP_CREATE_FAILED", ErrorCategory.GROUP, 400)
+    GROUP_DELETE_FAILED = ("GROUP_DELETE_FAILED", ErrorCategory.GROUP, 400)
+    GROUP_KICK_FAILED = ("GROUP_KICK_FAILED", ErrorCategory.GROUP, 400)
+    GROUP_LEAVE_FAILED = ("GROUP_LEAVE_FAILED", ErrorCategory.GROUP, 400)
+    GROUP_JOIN_REQUEST_FAILED = ("GROUP_JOIN_REQUEST_FAILED", ErrorCategory.GROUP, 400)
+    GROUP_NAME_RESERVED = ("GROUP_NAME_RESERVED", ErrorCategory.GROUP, 400)
+
+    # ── Message ───────────────────────────────────────────────────────
+    MESSAGE_NOT_FOUND = ("MESSAGE_NOT_FOUND", ErrorCategory.MESSAGE, 404)
+    MESSAGE_RECIPIENT_NOT_FOUND = ("MESSAGE_RECIPIENT_NOT_FOUND", ErrorCategory.MESSAGE, 404)
+    MESSAGE_DELETE_FAILED = ("MESSAGE_DELETE_FAILED", ErrorCategory.MESSAGE, 400)
+    MESSAGE_SEND_FAILED = ("MESSAGE_SEND_FAILED", ErrorCategory.MESSAGE, 400)
+
+    # ── File ──────────────────────────────────────────────────────────
+    FILE_TOO_LARGE = ("FILE_TOO_LARGE", ErrorCategory.FILE, 413)
+    FILE_INVALID_TYPE = ("FILE_INVALID_TYPE", ErrorCategory.FILE, 400)
+    FILE_UPLOAD_FAILED = ("FILE_UPLOAD_FAILED", ErrorCategory.FILE, 500)
+    FILE_NOT_FOUND = ("FILE_NOT_FOUND", ErrorCategory.FILE, 404)
+    FILE_DOWNLOAD_FAILED = ("FILE_DOWNLOAD_FAILED", ErrorCategory.FILE, 400)
+
+    # ── Admin ─────────────────────────────────────────────────────────
+    ADMIN_UNAUTHORIZED = ("ADMIN_UNAUTHORIZED", ErrorCategory.ADMIN, 401)
+    ADMIN_USER_NOT_FOUND = ("ADMIN_USER_NOT_FOUND", ErrorCategory.ADMIN, 404)
+    ADMIN_USER_UPDATE_FAILED = ("ADMIN_USER_UPDATE_FAILED", ErrorCategory.ADMIN, 400)
+    ADMIN_GROUP_OPERATION_FAILED = ("ADMIN_GROUP_OPERATION_FAILED", ErrorCategory.ADMIN, 400)
+    ADMIN_BROADCAST_FAILED = ("ADMIN_BROADCAST_FAILED", ErrorCategory.ADMIN, 500)
+    ADMIN_MEDIA_DELETE_FAILED = ("ADMIN_MEDIA_DELETE_FAILED", ErrorCategory.ADMIN, 400)
+
+    # ── Rate Limit ────────────────────────────────────────────────────
+    RATE_LIMIT_EXCEEDED = ("RATE_LIMIT_EXCEEDED", ErrorCategory.RATE_LIMIT, 429)
+
+    # ── Server ────────────────────────────────────────────────────────
+    SERVER_INTERNAL_ERROR = ("SERVER_INTERNAL_ERROR", ErrorCategory.SERVER, 500)
+    SERVER_SERVICE_UNAVAILABLE = ("SERVER_SERVICE_UNAVAILABLE", ErrorCategory.SERVER, 503)
+    SERVER_NOT_IMPLEMENTED = ("SERVER_NOT_IMPLEMENTED", ErrorCategory.SERVER, 501)

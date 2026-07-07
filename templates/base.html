@@ -1,8 +1,9 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="{{ theme | default('system') }}">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>Falcon Web Chat</title>
     <!-- Bootstrap CSS -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
@@ -10,9 +11,32 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/static/css/style.css">
+    <style>
+        h1, h2, h3, h4, h5, h6, .fw-bold { text-wrap: balance; }
+        html { -webkit-text-size-adjust: 100%; }
+    </style>
+    <script src="/static/js/csrf.js"></script>
+    <script>
+        // Resolve 'system' theme immediately to prevent flash
+        (function() {
+            var theme = document.documentElement.getAttribute('data-theme');
+            if (theme === 'system') {
+                theme = window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+                document.documentElement.setAttribute('data-theme', theme);
+            }
+            // Listen for system theme changes
+            window.matchMedia('(prefers-color-scheme: light)').addEventListener('change', function(e) {
+                var current = document.documentElement.getAttribute('data-theme');
+                var stored = localStorage.getItem('falcon_theme');
+                if (stored === 'system' || !stored) {
+                    document.documentElement.setAttribute('data-theme', e.matches ? 'light' : 'dark');
+                }
+            });
+        })();
+    </script>
 </head>
 <body class="text-light">
-    <div id="toast-container" aria-live="polite" aria-atomic="true" class="position-fixed bottom-0 end-0 p-3" style="z-index: 1050;"></div>
+    <div id="toast-container" aria-live="polite" aria-atomic="true" class="position-fixed bottom-0 end-0 p-3" style="z-index: 1050; padding-bottom: calc(1rem + var(--safe-area-bottom, 0px)) !important;"></div>
     {% block content %}{% endblock %}
     
     <!-- Bootstrap JS Bundle -->

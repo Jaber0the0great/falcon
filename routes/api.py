@@ -1,46 +1,100 @@
 import os
 import uuid
 import base64
+import logging
+import unicodedata
 from flask import Blueprint, request, jsonify, session, current_app, send_from_directory
 from models.models import Message, User, Group, GroupMember, GroupInvite, GroupJoinRequest
 from database.database import db
+from utils.crypto import decrypt_text
+from utils.api import success_response, error_response, ErrorCode
+from utils.security import (
+    validate_required_fields,
+    validate_group_name,
+    validate_username,
+    validate_username_list,
+    validate_string_length,
+    sanitize_filename,
+    ValidationError,
+    login_required,
+    rate_limit,
+    user_key,
+    ip_key,
+    HISTORY_LIMIT,
+    UPLOAD_LIMIT,
+    DOWNLOAD_LIMIT,
+    CALL_LOG_LIMIT,
+    GROUP_CREATE_LIMIT,
+    GROUP_LIST_LIMIT,
+    GROUP_INVITE_LIMIT,
+    GROUP_INVITE_RESPOND_LIMIT,
+    GROUP_JOIN_REQUEST_LIMIT,
+    GROUP_JOIN_REQUESTS_LIST_LIMIT,
+    GROUP_JOIN_REQUESTS_RESPOND_LIMIT,
+    GROUP_MEMBERS_LIMIT,
+    GROUP_KICK_LIMIT,
+    GROUP_LEAVE_LIMIT,
+    GROUP_DELETE_LIMIT,
+    USER_INFO_LIMIT,
+    WEBRTC_CONFIG_LIMIT,
+    MAX_GROUP_DESCRIPTION_LENGTH,
+    MAX_UPLOAD_SIZE,
+    MAX_FILE_NAME_LENGTH,
+    ALLOWED_EXTENSIONS,
+    DANGEROUS_FILENAME_CHARS,
+    SUSPICIOUS_MIME_TYPES,
+)
+
+logger = logging.getLogger(__name__)
 
 api_bp = Blueprint('api', __name__, url_prefix='/api')
 
 @api_bp.route('/history', methods=['GET'])
+@rate_limit(HISTORY_LIMIT, key_func=user_key)
 def get_history():
     if 'user_id' not in session:
-        return jsonify({"success": False, "error": "Not authenticated"}), 401
-        
+        return error_response(ErrorCode.AUTH_NOT_AUTHENTICATED[0], "Not authenticated", status_code=401)
+
     my_name = session['username']
     other_name = request.args.get('target', 'All')
-    
+
+    if len(other_name) > 80:
+        return error_response(ErrorCode.VALIDATION_INVALID_TARGET[0], "Invalid target", status_code=400)
+
+    limit = request.args.get('limit', 50, type=int)
+    offset = request.args.get('offset', 0, type=int)
+    limit = min(limit, 200)
+
     if other_name == "All":
-        messages = Message.query.filter(
+        base = Message.query.filter(
             (Message.recipient == "All") &
             ~((Message.sender == my_name) & (Message.deleted_by_sender == True))
-        ).order_by(Message.id.asc()).all()
+        )
+        total = base.count()
+        messages = base.order_by(Message.id.asc()).limit(limit).offset(offset).all()
     else:
-        # Check if the target is a group
         group = Group.query.filter_by(name=other_name).first()
         if group:
-            # Verify the current user is a member of the group
             is_member = GroupMember.query.filter_by(group_name=other_name, username=my_name).first() is not None
             if not is_member:
-                return jsonify({"success": False, "error": "Unauthorized"}), 403
-            
-            messages = Message.query.filter(
+                return error_response(ErrorCode.GROUP_NOT_MEMBER[0], "Unauthorized", status_code=403)
+
+            base = Message.query.filter(
                 (Message.recipient == other_name) &
                 ~((Message.sender == my_name) & (Message.deleted_by_sender == True))
-            ).order_by(Message.id.asc()).all()
+            )
+            total = base.count()
+            messages = base.order_by(Message.id.asc()).limit(limit).offset(offset).all()
         else:
-            messages = Message.query.filter(
+            base = Message.query.filter(
                 (((Message.sender == my_name) & (Message.recipient == other_name)) |
                  ((Message.sender == other_name) & (Message.recipient == my_name))) &
                 ~((Message.sender == my_name) & (Message.deleted_by_sender == True)) &
                 ~((Message.recipient == my_name) & (Message.deleted_by_recipient == True))
-            ).order_by(Message.id.asc()).all()
-        
+            )
+            total = base.count()
+            messages = base.order_by(Message.id.asc()).limit(limit).offset(offset).all()
+
     result = []
     for msg in messages:
         result.append({
@@ -48,7 +102,7 @@ def get_history():
             "sender": msg.sender,
             "to": msg.recipient,
             "type": msg.msg_type,
-            "content": msg.content,
+            "content": decrypt_text(msg.content),
             "time": msg.time,
             "duration": msg.duration,
             "size": msg.duration,
@@ -58,48 +112,158 @@ def get_history():
             "msg_id": msg.msg_id,
             "reactions": msg.reactions,
             "reply_to": msg.reply_to,
-            "reply_content": msg.reply_content
+            "reply_content": decrypt_text(msg.reply_content)
         })
-    return jsonify({"success": True, "messages": result})
+    return success_response({"messages": result, "total": total, "offset": offset, "limit": limit})
 
 @api_bp.route('/upload', methods=['POST'])
+@rate_limit(UPLOAD_LIMIT, key_func=user_key)
 def upload_file():
     if 'user_id' not in session:
-        return jsonify({"success": False, "error": "Not authenticated"}), 401
-        
+        return error_response(ErrorCode.AUTH_NOT_AUTHENTICATED[0], "Not authenticated", status_code=401)
+
     if 'file' not in request.files:
-        return jsonify({"success": False, "error": "No file part"}), 400
-        
+        return error_response(ErrorCode.VALIDATION_MISSING_FIELD[0], "No file part", status_code=400)
+
     file = request.files['file']
-    if file.filename == '':
-        return jsonify({"success": False, "error": "No selected file"}), 400
-        
-    if file:
-        filename = f"{uuid.uuid4().hex}_{file.filename}"
-        filepath = os.path.join(current_app.config['UPLOAD_FOLDER'], filename)
-        file.save(filepath)
-        size = os.path.getsize(filepath)
-        return jsonify({
-            "success": True, 
-            "filename": filename,
-            "original_name": file.filename,
-            "size": size
-        })
+    original_name = file.filename or ''
+    if original_name == '':
+        return error_response(ErrorCode.VALIDATION_MISSING_FIELD[0], "No selected file", status_code=400)
+
+    # ── Layer 1: Filename validation ────────────────────────────────────
+
+    # Reject filenames that exceed the configured maximum length
+    if len(original_name) > MAX_FILE_NAME_LENGTH:
+        return error_response(ErrorCode.VALIDATION_INVALID_INPUT[0], "Invalid filename", status_code=400)
+
+    # Reject dangerous control characters (C0 controls, DEL, bidi overrides)
+    if any(c in DANGEROUS_FILENAME_CHARS for c in original_name):
+        return error_response(ErrorCode.VALIDATION_INVALID_INPUT[0], "Invalid filename", status_code=400)
+
+    # Unicode NFC normalization (canonical composition)
+    normalized_name = unicodedata.normalize('NFC', original_name)
+
+    # Sanitize: strip path separators, restrict to safe character set
+    safe_name = sanitize_filename(normalized_name)
+    if not safe_name or safe_name == "untitled":
+        return error_response(ErrorCode.VALIDATION_INVALID_INPUT[0], "Invalid filename", status_code=400)
+
+    # ── Layer 2: Extension validation (allowlist) ───────────────────────
+
+    # Reject files without a detectable extension
+    last_ext = os.path.splitext(safe_name)[1].lower()
+    if not last_ext:
+        return error_response(ErrorCode.VALIDATION_INVALID_INPUT[0], "Invalid filename", status_code=400)
+
+    # Check every extension segment against the allowlist.
+    # This naturally catches double-extensions (e.g. image.png.exe)
+    # because .exe is not in the allowlist.
+    parts = safe_name.split('.')
+    for i in range(1, len(parts)):
+        ext = '.' + parts[i].lower()
+        if ext not in ALLOWED_EXTENSIONS:
+            return error_response(ErrorCode.FILE_INVALID_TYPE[0], "File type not allowed.", status_code=400)
+
+    # ── Layer 3: File-size validation ───────────────────────────────────
+
+    file.seek(0, os.SEEK_END)
+    size = file.tell()
+    file.seek(0)
+    if size > MAX_UPLOAD_SIZE:
+        return error_response(ErrorCode.FILE_TOO_LARGE[0], "File too large.", status_code=413)
+
+    # ── Layer 4: Advisory MIME-type check ───────────────────────────────
+    # Content-Type is user-controlled and MUST NOT be trusted for access
+    # decisions.  This check is an advisory hint only; the actual file
+    # type is governed by the extension allowlist (Layer 2) and future
+    # magic-byte inspection (Layer 5).
+
+    content_type = (file.content_type or '').lower()
+    if content_type in SUSPICIOUS_MIME_TYPES:
+        return error_response(ErrorCode.FILE_INVALID_TYPE[0], "File type not allowed.", status_code=400)
+
+    # ── Layer 5: Magic-byte inspection ──────────────────────────────────
+    # NOT IMPLEMENTED — see SECURITY_IMPLEMENTATION_ROADMAP_V2.md (FI-001).
+    # Full magic-byte validation would require either the python-magic
+    # library (which depends on libmagic, a native C library) or a
+    # manually curated signature database covering hundreds of file
+    # formats.  Both approaches add significant complexity for limited
+    # incremental gain given that Layers 1-4 already prevent executable
+    # uploads.  Deferred as a future hardening item.
+
+    # ── Save ────────────────────────────────────────────────────────────
+
+    filename = f"{uuid.uuid4().hex}_{safe_name}"
+    filepath = os.path.join(current_app.config['UPLOAD_FOLDER'], filename)
+    file.save(filepath)
+
+    # Post-save size verification
+    saved_size = os.path.getsize(filepath)
+    if saved_size > MAX_UPLOAD_SIZE:
+        os.remove(filepath)
+        return error_response(ErrorCode.FILE_TOO_LARGE[0], "File too large.", status_code=413)
+
+    return success_response({
+        "filename": filename,
+        "original_name": original_name,
+        "size": saved_size
+    })
 
 @api_bp.route('/download/<filename>', methods=['GET'])
+@login_required
+@rate_limit(DOWNLOAD_LIMIT, key_func=ip_key)
 def download_file(filename):
-    return send_from_directory(current_app.config['UPLOAD_FOLDER'], filename)
+    """Serve an uploaded file.
+
+    Security model
+    --------------
+    *Public endpoint* — no authentication required.
+
+    Rationale:
+      The stored filenames use the pattern ``<uuid_hex>_<safe_name>``, where
+      ``uuid_hex`` is a 128-bit random value (32 hex chars).  This makes
+      direct URL enumeration infeasible (2¹²⁸ search space).  Files can only
+      be accessed by users who have been given the specific URL (typically
+      via a chat message that contains the filename).
+
+    Why this is acceptable today:
+      1. UUID-based naming provides URL-level protection equivalent to a
+         bearer token scoped to that single resource.
+      2. Adding per-user download authorization would require tracking which
+         users are entitled to which files (e.g. a ``FileAccess`` table or
+         signed URLs).  That is a product-level feature, not a security
+         regression, and is out of scope for the current hardening phase.
+
+    Defences in place:
+      - ``sanitize_filename()`` strips path separators and non-alphanumeric
+        characters, preventing path-traversal attacks.
+      - ``send_from_directory()`` (Flask) raises a 404 if the resolved path
+        falls outside *UPLOAD_FOLDER*, providing defence in depth.
+      - Filenames are validated at upload time (extension allowlist, length,
+        character restrictions) so every file served has already passed
+        multiple security layers.
+
+    Future improvement:
+      Signed (time-limited) URLs could be introduced if per-user access
+      control is ever required.
+    """
+    safe_name = sanitize_filename(filename)
+    if not safe_name:
+        return error_response(ErrorCode.FILE_DOWNLOAD_FAILED[0], "Invalid filename", status_code=400)
+    return send_from_directory(current_app.config['UPLOAD_FOLDER'], safe_name)
 
 @api_bp.route('/user_info', methods=['GET'])
+@rate_limit(USER_INFO_LIMIT, key_func=user_key)
 def get_user_info():
     if 'user_id' not in session:
-        return jsonify({"success": False, "error": "Not authenticated"}), 401
-    return jsonify({"success": True, "username": session['username']})
+        return error_response(ErrorCode.AUTH_NOT_AUTHENTICATED[0], "Not authenticated", status_code=401)
+    return success_response({"username": session['username']})
 
 @api_bp.route('/webrtc_config', methods=['GET'])
+@rate_limit(WEBRTC_CONFIG_LIMIT, key_func=ip_key)
 def get_webrtc_config():
     if 'user_id' not in session:
-        return jsonify({"success": False, "error": "Not authenticated"}), 401
+        return error_response(ErrorCode.AUTH_NOT_AUTHENTICATED[0], "Not authenticated", status_code=401)
         
     turn_url = current_app.config.get('TURN_SERVER', 'turn:openrelay.metered.ca:80')
     username = current_app.config.get('TURN_USERNAME', 'openrelayproject')
@@ -108,9 +272,7 @@ def get_webrtc_config():
     # Extract host:port from the config URL
     host_port = turn_url.split('turn:')[-1].split('?')[0]
     
-    return jsonify({
-        "success": True,
-        "iceServers": [
+    return success_response({"iceServers": [
             { "urls": "stun:stun.l.google.com:19302" },
             { "urls": "stun:stun1.l.google.com:19302" },
             { "urls": "stun:stun2.l.google.com:19302" },
@@ -139,26 +301,43 @@ def get_webrtc_config():
 # --- GROUP CHAT ENDPOINTS ---
 
 @api_bp.route('/groups/create', methods=['POST'])
+@rate_limit(GROUP_CREATE_LIMIT, key_func=user_key)
 def create_group():
     if 'user_id' not in session:
-        return jsonify({"success": False, "error": "Not authenticated"}), 401
+        return error_response(ErrorCode.AUTH_NOT_AUTHENTICATED[0], "Not authenticated", status_code=401)
     
     my_name = session['username']
     data = request.json or {}
-    group_name = data.get('name', '').strip()
-    description = data.get('description', '').strip()
+    raw_name = (data.get('name') or '').strip()
     
-    if not group_name:
-        return jsonify({"success": False, "error": "Group name is required"}), 400
+    if not raw_name:
+        return error_response(ErrorCode.VALIDATION_MISSING_FIELD[0], "Group name is required", status_code=400)
         
-    if group_name == 'All' or group_name.lower() == 'all':
-        return jsonify({"success": False, "error": "Invalid group name"}), 400
+    if raw_name.lower() == 'all':
+        return error_response(ErrorCode.VALIDATION_INVALID_GROUP_NAME[0], "Invalid group name", status_code=400)
+        
+    try:
+        group_name = validate_group_name(raw_name)
+    except ValidationError as e:
+        return error_response(ErrorCode.VALIDATION_INVALID_GROUP_NAME[0], e.message, status_code=400)
+    
+    try:
+        description = (data.get('description') or '').strip()
+        if description:
+            validate_string_length(description, 0, MAX_GROUP_DESCRIPTION_LENGTH, "Description")
+    except ValidationError as e:
+        return error_response(ErrorCode.VALIDATION_INVALID_INPUT[0], e.message, status_code=400)
+    
+    try:
+        members = validate_username_list(data.get('members', []))
+    except ValidationError as e:
+        return error_response(ErrorCode.VALIDATION_INVALID_INPUT[0], e.message, status_code=400)
         
     # Check if a group or user with this name already exists (since they share the namespace in messages)
     existing_group = Group.query.filter_by(name=group_name).first()
-    existing_user = User.query.filter(User.username.ilike(group_name)).first()
+    existing_user = User.query.filter(User.username.ilike(group_name), User.is_admin != True).first()
     if existing_group or existing_user:
-        return jsonify({"success": False, "error": "Name already taken"}), 400
+        return error_response(ErrorCode.GROUP_CREATE_FAILED[0], "Name already taken", status_code=400)
         
     # Create the group
     group = Group(name=group_name, owner_username=my_name, description=description)
@@ -169,12 +348,10 @@ def create_group():
     db.session.add(member)
     
     # Add selected members directly
-    selected_members = data.get('members', [])
-    for u_name in selected_members:
-        u_name = u_name.strip()
-        if u_name and u_name != my_name:
+    for u_name in members:
+        if u_name.lower() != my_name.lower():
             user_exists = User.query.filter(User.username.ilike(u_name)).first()
-            if user_exists:
+            if user_exists and not user_exists.is_admin:
                 mb = GroupMember(group_name=group_name, username=user_exists.username)
                 db.session.add(mb)
                 
@@ -189,14 +366,15 @@ def create_group():
                 "created_by": my_name
             }, room='All')
     except Exception as e:
-        print("Error emitting group_list_updated socket event on create:", e)
+        logger.error("Error emitting group_list_updated socket event on create: %s", e)
         
-    return jsonify({"success": True, "message": "Group created successfully"})
+    return success_response({"message": "Group created successfully"})
 
 @api_bp.route('/groups', methods=['GET'])
+@rate_limit(GROUP_LIST_LIMIT, key_func=user_key)
 def get_groups():
     if 'user_id' not in session:
-        return jsonify({"success": False, "error": "Not authenticated"}), 401
+        return error_response(ErrorCode.AUTH_NOT_AUTHENTICATED[0], "Not authenticated", status_code=401)
         
     my_name = session['username']
     groups = Group.query.order_by(Group.name.asc()).all()
@@ -218,25 +396,29 @@ def get_groups():
             "has_request": has_request
         })
         
-    return jsonify({"success": True, "groups": result})
+    return success_response({"groups": result})
 
 @api_bp.route('/calls/log', methods=['POST'])
+@rate_limit(CALL_LOG_LIMIT, key_func=user_key)
 def save_call_log():
     if 'user_id' not in session:
-        return jsonify({"success": False, "error": "Not authenticated"}), 401
+        return error_response(ErrorCode.AUTH_NOT_AUTHENTICATED[0], "Not authenticated", status_code=401)
         
     my_name = session['username']
     data = request.json or {}
+
+    try:
+        validate_required_fields(data, 'recipient', 'status')
+    except ValidationError:
+        return error_response(ErrorCode.VALIDATION_MISSING_FIELD[0], "Missing parameters", status_code=400)
+
     recipient = data.get('recipient')
-    status = data.get('status')  # 'completed', 'missed', 'rejected', 'busy'
+    status = data.get('status')
     duration = int(data.get('duration', 0))
-    
-    if not recipient or not status:
-        return jsonify({"success": False, "error": "Missing parameters"}), 400
         
     recip_user = User.query.filter_by(username=recipient).first()
     if not recip_user:
-        return jsonify({"success": False, "error": "Recipient not found"}), 404
+        return error_response(ErrorCode.MESSAGE_RECIPIENT_NOT_FOUND[0], "Recipient not found", status_code=404)
         
     import uuid
     import datetime as dt
@@ -273,33 +455,44 @@ def save_call_log():
         socketio.emit('new_message', payload, room=recipient)
         socketio.emit('new_message', payload, room=my_name)
     except Exception as e:
-        print("Error emitting call log socket event:", e)
+        logger.error("Error emitting call log socket event: %s", e)
         
-    return jsonify({"success": True, "message": "Call log saved successfully"})
+    return success_response({"message": "Call log saved successfully"})
 
 @api_bp.route('/groups/invite', methods=['POST'])
+@rate_limit(GROUP_INVITE_LIMIT, key_func=user_key)
 def invite_to_group():
     if 'user_id' not in session:
-        return jsonify({"success": False, "error": "Not authenticated"}), 401
+        return error_response(ErrorCode.AUTH_NOT_AUTHENTICATED[0], "Not authenticated", status_code=401)
         
     my_name = session['username']
     data = request.json or {}
-    group_name = data.get('group_name')
+    group_name_raw = data.get('group_name')
     
     # Support both single username and batch usernames
     target_usernames = data.get('usernames', [])
     if not target_usernames and data.get('username'):
         target_usernames = [data.get('username')]
         
-    if not group_name or not target_usernames:
-        return jsonify({"success": False, "error": "Missing parameters"}), 400
+    if not group_name_raw or not target_usernames:
+        return error_response(ErrorCode.VALIDATION_MISSING_FIELD[0], "Missing parameters", status_code=400)
+    
+    try:
+        group_name = validate_group_name(group_name_raw)
+    except ValidationError:
+        return error_response(ErrorCode.VALIDATION_INVALID_GROUP_NAME[0], "Missing parameters", status_code=400)
+    
+    try:
+        target_usernames = validate_username_list(target_usernames)
+    except ValidationError:
+        return error_response(ErrorCode.VALIDATION_INVALID_INPUT[0], "Missing parameters", status_code=400)
         
     group = Group.query.filter_by(name=group_name).first()
     if not group:
-        return jsonify({"success": False, "error": "Group not found"}), 404
+        return error_response(ErrorCode.GROUP_NOT_FOUND[0], "Group not found", status_code=404)
         
     if group.owner_username != my_name:
-        return jsonify({"success": False, "error": "Only the group owner can invite users"}), 403
+        return error_response(ErrorCode.GROUP_INVITE_FAILED[0], "Only the group owner can invite users", status_code=403)
         
     invited_count = 0
     errors = []
@@ -310,8 +503,7 @@ def invite_to_group():
             continue
             
         target_user = User.query.filter(User.username.ilike(target_username)).first()
-        if not target_user:
-            errors.append(f"User {target_username} not found")
+        if not target_user or target_user.is_admin:
             continue
             
         # Check if already a member
@@ -337,29 +529,35 @@ def invite_to_group():
                     "invited_by": my_name
                 }, room=target_user.username)
         except Exception as e:
-            print("Error emitting group_invite_received socket event:", e)
+            logger.error("Error emitting group_invite_received socket event: %s", e)
             
     if invited_count > 0:
         db.session.commit()
         
-    return jsonify({"success": True, "message": f"Successfully sent {invited_count} invitation(s)", "errors": errors})
+    return success_response({"message": f"Successfully sent {invited_count} invitation(s)", "errors": errors})
 
 @api_bp.route('/groups/invite/respond', methods=['POST'])
+@rate_limit(GROUP_INVITE_RESPOND_LIMIT, key_func=user_key)
 def respond_to_invite():
     if 'user_id' not in session:
-        return jsonify({"success": False, "error": "Not authenticated"}), 401
+        return error_response(ErrorCode.AUTH_NOT_AUTHENTICATED[0], "Not authenticated", status_code=401)
         
     my_name = session['username']
     data = request.json or {}
-    group_name = data.get('group_name')
+    group_name_raw = data.get('group_name')
     action = data.get('action') # 'accept' or 'reject'
     
-    if not group_name or action not in ('accept', 'reject'):
-        return jsonify({"success": False, "error": "Invalid parameters"}), 400
+    if not group_name_raw or action not in ('accept', 'reject'):
+        return error_response(ErrorCode.VALIDATION_MISSING_FIELD[0], "Invalid parameters", status_code=400)
+    
+    try:
+        group_name = validate_group_name(group_name_raw)
+    except ValidationError:
+        return error_response(ErrorCode.VALIDATION_INVALID_GROUP_NAME[0], "Invalid parameters", status_code=400)
         
     invite = GroupInvite.query.filter_by(group_name=group_name, username=my_name, status='pending').first()
     if not invite:
-        return jsonify({"success": False, "error": "Invitation not found"}), 404
+        return error_response(ErrorCode.GROUP_INVITE_FAILED[0], "Invitation not found", status_code=404)
         
     if action == 'accept':
         invite.status = 'accepted'
@@ -395,37 +593,43 @@ def respond_to_invite():
                         "msg_id": msg_id
                     }, room=group_name)
             except Exception as e:
-                print("Error emitting join group room:", e)
+                logger.error("Error emitting join group room: %s", e)
     else:
         invite.status = 'rejected'
         
     db.session.commit()
-    return jsonify({"success": True, "message": f"Invitation {action}ed successfully"})
+    return success_response({"message": f"Invitation {action}ed successfully"})
 
 @api_bp.route('/groups/request_join', methods=['POST'])
+@rate_limit(GROUP_JOIN_REQUEST_LIMIT, key_func=user_key)
 def request_join():
     if 'user_id' not in session:
-        return jsonify({"success": False, "error": "Not authenticated"}), 401
+        return error_response(ErrorCode.AUTH_NOT_AUTHENTICATED[0], "Not authenticated", status_code=401)
         
     my_name = session['username']
     data = request.json or {}
-    group_name = data.get('group_name')
+    group_name_raw = data.get('group_name')
     
-    if not group_name:
-        return jsonify({"success": False, "error": "Group name is required"}), 400
+    if not group_name_raw:
+        return error_response(ErrorCode.VALIDATION_MISSING_FIELD[0], "Group name is required", status_code=400)
+    
+    try:
+        group_name = validate_group_name(group_name_raw)
+    except ValidationError as e:
+        return error_response(ErrorCode.VALIDATION_INVALID_GROUP_NAME[0], e.message, status_code=400)
         
     group = Group.query.filter_by(name=group_name).first()
     if not group:
-        return jsonify({"success": False, "error": "Group not found"}), 404
+        return error_response(ErrorCode.GROUP_NOT_FOUND[0], "Group not found", status_code=404)
         
     # Check if already member
     if GroupMember.query.filter_by(group_name=group_name, username=my_name).first():
-        return jsonify({"success": False, "error": "Already a member"}), 400
+        return error_response(ErrorCode.GROUP_ALREADY_MEMBER[0], "Already a member", status_code=400)
         
     # Check if already requested
     existing_req = GroupJoinRequest.query.filter_by(group_name=group_name, username=my_name, status='pending').first()
     if existing_req:
-        return jsonify({"success": False, "error": "Request already pending"}), 400
+        return error_response(ErrorCode.GROUP_JOIN_REQUEST_FAILED[0], "Request already pending", status_code=400)
         
     # Create request
     req_join = GroupJoinRequest(group_name=group_name, username=my_name)
@@ -441,56 +645,70 @@ def request_join():
                 "username": my_name
             }, room=group.owner_username)
     except Exception as e:
-        print("Error emitting request join socket:", e)
+        logger.error("Error emitting request join socket: %s", e)
         
-    return jsonify({"success": True, "message": "Join request submitted successfully"})
+    return success_response({"message": "Join request submitted successfully"})
 
 @api_bp.route('/groups/requests', methods=['GET'])
+@rate_limit(GROUP_JOIN_REQUESTS_LIST_LIMIT, key_func=user_key)
 def get_join_requests():
     if 'user_id' not in session:
-        return jsonify({"success": False, "error": "Not authenticated"}), 401
+        return error_response(ErrorCode.AUTH_NOT_AUTHENTICATED[0], "Not authenticated", status_code=401)
         
     my_name = session['username']
-    group_name = request.args.get('group_name')
+    group_name_raw = request.args.get('group_name')
     
-    if not group_name:
-        return jsonify({"success": False, "error": "Group name is required"}), 400
+    if not group_name_raw:
+        return error_response(ErrorCode.VALIDATION_MISSING_FIELD[0], "Group name is required", status_code=400)
+    
+    try:
+        group_name = validate_group_name(group_name_raw)
+    except ValidationError as e:
+        return error_response(ErrorCode.VALIDATION_INVALID_GROUP_NAME[0], e.message, status_code=400)
         
     group = Group.query.filter_by(name=group_name).first()
     if not group:
-        return jsonify({"success": False, "error": "Group not found"}), 404
+        return error_response(ErrorCode.GROUP_NOT_FOUND[0], "Group not found", status_code=404)
         
     if group.owner_username != my_name:
-        return jsonify({"success": False, "error": "Unauthorized"}), 403
+        return error_response(ErrorCode.GROUP_NOT_MEMBER[0], "Unauthorized", status_code=403)
         
     reqs = GroupJoinRequest.query.filter_by(group_name=group_name, status='pending').all()
-    result = [r.username for r in reqs]
-    return jsonify({"success": True, "requests": result})
+    admin_usernames = {u.username for u in User.query.filter(User.is_admin == True).all()}
+    result = [r.username for r in reqs if r.username not in admin_usernames]
+    return success_response({"requests": result})
 
 @api_bp.route('/groups/requests/respond', methods=['POST'])
+@rate_limit(GROUP_JOIN_REQUESTS_RESPOND_LIMIT, key_func=user_key)
 def respond_to_request():
     if 'user_id' not in session:
-        return jsonify({"success": False, "error": "Not authenticated"}), 401
+        return error_response(ErrorCode.AUTH_NOT_AUTHENTICATED[0], "Not authenticated", status_code=401)
         
     my_name = session['username']
     data = request.json or {}
-    group_name = data.get('group_name')
-    target_username = data.get('username')
+    group_name_raw = data.get('group_name')
+    target_username_raw = data.get('username')
     action = data.get('action') # 'accept' or 'reject'
     
-    if not group_name or not target_username or action not in ('accept', 'reject'):
-        return jsonify({"success": False, "error": "Invalid parameters"}), 400
+    if not group_name_raw or not target_username_raw or action not in ('accept', 'reject'):
+        return error_response(ErrorCode.VALIDATION_MISSING_FIELD[0], "Invalid parameters", status_code=400)
+    
+    try:
+        group_name = validate_group_name(group_name_raw)
+        target_username = validate_username(target_username_raw)
+    except ValidationError:
+        return error_response(ErrorCode.VALIDATION_INVALID_INPUT[0], "Invalid parameters", status_code=400)
         
     group = Group.query.filter_by(name=group_name).first()
     if not group:
-        return jsonify({"success": False, "error": "Group not found"}), 404
+        return error_response(ErrorCode.GROUP_NOT_FOUND[0], "Group not found", status_code=404)
         
     if group.owner_username != my_name:
-        return jsonify({"success": False, "error": "Unauthorized"}), 403
+        return error_response(ErrorCode.GROUP_NOT_MEMBER[0], "Unauthorized", status_code=403)
         
     req_join = GroupJoinRequest.query.filter_by(group_name=group_name, username=target_username, status='pending').first()
     if not req_join:
-        return jsonify({"success": False, "error": "Request not found"}), 404
+        return error_response(ErrorCode.GROUP_NOT_FOUND[0], "Request not found", status_code=404)
         
     if action == 'accept':
         req_join.status = 'accepted'
@@ -524,57 +742,71 @@ def respond_to_request():
                         "msg_id": msg_id
                     }, room=group_name)
             except Exception as e:
-                print("Error emitting join group room:", e)
+                logger.error("Error emitting join group room: %s", e)
     else:
         req_join.status = 'rejected'
         
     db.session.commit()
-    return jsonify({"success": True, "message": f"Join request {action}ed successfully"})
+    return success_response({"message": f"Join request {action}ed successfully"})
 
 @api_bp.route('/groups/members', methods=['GET'])
+@rate_limit(GROUP_MEMBERS_LIMIT, key_func=user_key)
 def get_group_members():
     if 'user_id' not in session:
-        return jsonify({"success": False, "error": "Not authenticated"}), 401
+        return error_response(ErrorCode.AUTH_NOT_AUTHENTICATED[0], "Not authenticated", status_code=401)
         
-    group_name = request.args.get('group_name')
-    if not group_name:
-        return jsonify({"success": False, "error": "Group name is required"}), 400
+    group_name_raw = request.args.get('group_name')
+    if not group_name_raw:
+        return error_response(ErrorCode.VALIDATION_MISSING_FIELD[0], "Group name is required", status_code=400)
+    
+    try:
+        group_name = validate_group_name(group_name_raw)
+    except ValidationError as e:
+        return error_response(ErrorCode.VALIDATION_INVALID_GROUP_NAME[0], e.message, status_code=400)
         
     # Verify is member
     my_name = session['username']
     if not GroupMember.query.filter_by(group_name=group_name, username=my_name).first():
-        return jsonify({"success": False, "error": "Unauthorized"}), 403
+        return error_response(ErrorCode.GROUP_NOT_MEMBER[0], "Unauthorized", status_code=403)
         
     members = GroupMember.query.filter_by(group_name=group_name).all()
-    result = [m.username for m in members]
-    return jsonify({"success": True, "members": result})
+    admin_usernames = {u.username for u in User.query.filter(User.is_admin == True).all()}
+    result = [m.username for m in members if m.username not in admin_usernames]
+    return success_response({"members": result})
 
 @api_bp.route('/groups/kick', methods=['POST'])
+@rate_limit(GROUP_KICK_LIMIT, key_func=user_key)
 def kick_member():
     if 'user_id' not in session:
-        return jsonify({"success": False, "error": "Not authenticated"}), 401
+        return error_response(ErrorCode.AUTH_NOT_AUTHENTICATED[0], "Not authenticated", status_code=401)
         
     my_name = session['username']
     data = request.json or {}
-    group_name = data.get('group_name')
-    target_username = data.get('username')
+    group_name_raw = data.get('group_name')
+    target_username_raw = data.get('username')
     
-    if not group_name or not target_username:
-        return jsonify({"success": False, "error": "Missing parameters"}), 400
+    if not group_name_raw or not target_username_raw:
+        return error_response(ErrorCode.VALIDATION_MISSING_FIELD[0], "Missing parameters", status_code=400)
+    
+    try:
+        group_name = validate_group_name(group_name_raw)
+        target_username = validate_username(target_username_raw)
+    except ValidationError:
+        return error_response(ErrorCode.VALIDATION_INVALID_INPUT[0], "Missing parameters", status_code=400)
         
     group = Group.query.filter_by(name=group_name).first()
     if not group:
-        return jsonify({"success": False, "error": "Group not found"}), 404
+        return error_response(ErrorCode.GROUP_NOT_FOUND[0], "Group not found", status_code=404)
         
     if group.owner_username != my_name:
-        return jsonify({"success": False, "error": "Unauthorized"}), 403
+        return error_response(ErrorCode.GROUP_NOT_MEMBER[0], "Unauthorized", status_code=403)
         
     if target_username == my_name:
-        return jsonify({"success": False, "error": "Cannot kick yourself"}), 400
+        return error_response(ErrorCode.GROUP_KICK_FAILED[0], "Cannot kick yourself", status_code=400)
         
     member = GroupMember.query.filter_by(group_name=group_name, username=target_username).first()
     if not member:
-        return jsonify({"success": False, "error": "Member not found"}), 404
+        return error_response(ErrorCode.GROUP_NOT_FOUND[0], "Member not found", status_code=404)
         
     db.session.delete(member)
     
@@ -608,33 +840,39 @@ def kick_member():
                 "msg_id": msg_id
             }, room=group_name)
     except Exception as e:
-        print("Error emitting kick/leave room:", e)
+        logger.error("Error emitting kick/leave room: %s", e)
         
     db.session.commit()
-    return jsonify({"success": True, "message": "Member kicked successfully"})
+    return success_response({"message": "Member kicked successfully"})
 
 @api_bp.route('/groups/leave', methods=['POST'])
+@rate_limit(GROUP_LEAVE_LIMIT, key_func=user_key)
 def leave_group():
     if 'user_id' not in session:
-        return jsonify({"success": False, "error": "Not authenticated"}), 401
+        return error_response(ErrorCode.AUTH_NOT_AUTHENTICATED[0], "Not authenticated", status_code=401)
         
     my_name = session['username']
     data = request.json or {}
-    group_name = data.get('group_name')
+    group_name_raw = data.get('group_name')
     
-    if not group_name:
-        return jsonify({"success": False, "error": "Group name is required"}), 400
+    if not group_name_raw:
+        return error_response(ErrorCode.VALIDATION_MISSING_FIELD[0], "Group name is required", status_code=400)
+    
+    try:
+        group_name = validate_group_name(group_name_raw)
+    except ValidationError as e:
+        return error_response(ErrorCode.VALIDATION_INVALID_GROUP_NAME[0], e.message, status_code=400)
         
     group = Group.query.filter_by(name=group_name).first()
     if not group:
-        return jsonify({"success": False, "error": "Group not found"}), 404
+        return error_response(ErrorCode.GROUP_NOT_FOUND[0], "Group not found", status_code=404)
         
     if group.owner_username == my_name:
-        return jsonify({"success": False, "error": "Owner cannot leave, delete the group instead"}), 400
+        return error_response(ErrorCode.GROUP_LEAVE_FAILED[0], "Owner cannot leave, delete the group instead", status_code=400)
         
     member = GroupMember.query.filter_by(group_name=group_name, username=my_name).first()
     if not member:
-        return jsonify({"success": False, "error": "Not a member"}), 400
+        return error_response(ErrorCode.GROUP_NOT_MEMBER[0], "Not a member", status_code=400)
         
     db.session.delete(member)
     
@@ -668,29 +906,35 @@ def leave_group():
                 "msg_id": msg_id
             }, room=group_name)
     except Exception as e:
-        print("Error emitting leave room:", e)
+        logger.error("Error emitting leave room: %s", e)
         
     db.session.commit()
-    return jsonify({"success": True, "message": "Left group successfully"})
+    return success_response({"message": "Left group successfully"})
 
 @api_bp.route('/groups/delete', methods=['POST'])
+@rate_limit(GROUP_DELETE_LIMIT, key_func=user_key)
 def delete_group():
     if 'user_id' not in session:
-        return jsonify({"success": False, "error": "Not authenticated"}), 401
+        return error_response(ErrorCode.AUTH_NOT_AUTHENTICATED[0], "Not authenticated", status_code=401)
         
     my_name = session['username']
     data = request.json or {}
-    group_name = data.get('group_name')
+    group_name_raw = data.get('group_name')
     
-    if not group_name:
-        return jsonify({"success": False, "error": "Group name is required"}), 400
+    if not group_name_raw:
+        return error_response(ErrorCode.VALIDATION_MISSING_FIELD[0], "Group name is required", status_code=400)
+    
+    try:
+        group_name = validate_group_name(group_name_raw)
+    except ValidationError as e:
+        return error_response(ErrorCode.VALIDATION_INVALID_GROUP_NAME[0], e.message, status_code=400)
         
     group = Group.query.filter_by(name=group_name).first()
     if not group:
-        return jsonify({"success": False, "error": "Group not found"}), 404
+        return error_response(ErrorCode.GROUP_NOT_FOUND[0], "Group not found", status_code=404)
         
     if group.owner_username != my_name:
-        return jsonify({"success": False, "error": "Unauthorized"}), 403
+        return error_response(ErrorCode.GROUP_DELETE_FAILED[0], "Unauthorized", status_code=403)
         
     # Delete group, members, invites, requests, and group messages
     Group.query.filter_by(name=group_name).delete()
@@ -705,10 +949,10 @@ def delete_group():
             socketio.emit('group_deleted', {"group_name": group_name}, room=group_name)
             socketio.emit('group_list_updated', {"group_name": group_name}, room='All')
     except Exception as e:
-        print("Error emitting group deleted socket:", e)
+        logger.error("Error emitting group deleted socket: %s", e)
         
     db.session.commit()
-    return jsonify({"success": True, "message": "Group deleted successfully"})
+    return success_response({"message": "Group deleted successfully"})
 
 
 

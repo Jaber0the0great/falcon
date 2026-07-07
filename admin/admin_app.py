@@ -4,6 +4,9 @@ import sqlite3
 import datetime
 import subprocess
 import threading
+import logging
+
+logger = logging.getLogger(__name__)
 
 # Matplotlib integration
 try:
@@ -24,31 +27,33 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import Qt, QSize, QPoint, QDate
 from PyQt6.QtGui import QFont, QColor, QIcon, QPalette, QAction
 
-# Attempt to import werkzeug for password hashing compatibility
-try:
-    from werkzeug.security import generate_password_hash
-except ImportError:
-    # Fallback to simple secure hash if werkzeug is not installed
-    import hashlib
-    def generate_password_hash(password):
-        salt = "falcon_salt_12345"
-        h = hashlib.sha256((password + salt).encode()).hexdigest()
-        return f"sha256$falcon${h}"
+from werkzeug.security import generate_password_hash
 
-# Decryption logic with the shared static Falcon key
-try:
-    from cryptography.fernet import Fernet
-    CHAT_KEY = b'v-9_2fGzS_L0N8oX5x6y_Kz_jZ1M9Wv8m_U3k_QWzY8='
-    CIPHER = Fernet(CHAT_KEY)
-    def decrypt_text(encrypted_text):
-        if not encrypted_text:
+# Decryption logic — loads key from environment variable
+import os as _os
+from cryptography.fernet import Fernet, MultiFernet
+
+_DECRYPT_CIPHER = None
+
+def decrypt_text(encrypted_text):
+    global _DECRYPT_CIPHER
+    if not encrypted_text:
+        return encrypted_text
+    if _DECRYPT_CIPHER is None:
+        key = _os.environ.get('ENCRYPTION_KEY')
+        if not key:
             return encrypted_text
-        try:
-            return CIPHER.decrypt(encrypted_text.encode()).decode()
-        except Exception:
-            return encrypted_text
-except ImportError:
-    def decrypt_text(encrypted_text):
+        if isinstance(key, str):
+            key = key.encode()
+        old_keys_str = _os.environ.get('ENCRYPTION_KEY_OLD_KEYS', '')
+        old_keys = [k.strip().encode() if isinstance(k, str) else k
+                    for k in old_keys_str.split(',') if k.strip()]
+        all_key_bytes = [key] + old_keys
+        ferns = [Fernet(k) for k in all_key_bytes]
+        _DECRYPT_CIPHER = ferns[0] if len(ferns) == 1 else MultiFernet(ferns)
+    try:
+        return _DECRYPT_CIPHER.decrypt(encrypted_text.encode()).decode()
+    except Exception:
         return encrypted_text
 
 class ResetPasswordDialog(QDialog):
@@ -227,7 +232,7 @@ class AdminApp(QMainWindow):
         super().__init__()
         self.setWindowTitle("Falcon Chat - Administration Control Panel")
         self.resize(1150, 780)
-        self.db_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'falcon_web.db')
+        self.db_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'database', 'falcon_web.db')
         self.server_process = None
         self.init_theme()
         self.init_ui()
@@ -826,7 +831,7 @@ class AdminApp(QMainWindow):
                 self.groups_table.setItem(i, 2, QTableWidgetItem(r['owner_username']))
                 self.groups_table.setItem(i, 3, QTableWidgetItem(str(r['created_at'])))
         except Exception as e:
-            print("Error loading groups:", e)
+            logger.error("Error loading groups: %s", e)
         finally:
             conn.close()
 
@@ -854,7 +859,7 @@ class AdminApp(QMainWindow):
                 conn.close()
 
     def load_media(self):
-        upload_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'static', 'uploads')
+        upload_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'static', 'uploads')
         if not os.path.exists(upload_dir): return
         self.media_table.setRowCount(0)
         files = os.listdir(upload_dir)
@@ -877,7 +882,7 @@ class AdminApp(QMainWindow):
         if not selected: return
         row = selected[0].topRow()
         fname = self.media_table.item(row, 0).text()
-        fpath = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'static', 'uploads', fname)
+        fpath = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'static', 'uploads', fname)
         
         reply = QMessageBox.question(self, "Delete File", f"Permanently delete {fname}?", QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
         if reply == QMessageBox.StandardButton.Yes:
@@ -1286,7 +1291,7 @@ class AdminApp(QMainWindow):
             self.canvas_msgs.draw()
             
         except Exception as e:
-            print("Chart Update Error:", e)
+            logger.error("Chart Update Error: %s", e)
         finally:
             conn.close()
 
@@ -1309,7 +1314,7 @@ class AdminApp(QMainWindow):
     def start_server(self):
         if self.server_process: return
         try:
-            script_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'app.py')
+            script_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'app.py')
             self.server_process = subprocess.Popen(
                 [sys.executable, script_path],
                 stdout=subprocess.PIPE,

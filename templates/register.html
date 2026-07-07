@@ -34,7 +34,8 @@ document.getElementById('register-form').addEventListener('submit', async (e) =>
     if(data.success) {
         window.location.href = '/';
     } else {
-        alert(data.error);
+        const err = data.error;
+        alert(typeof err === 'string' ? err : (err?.message || 'An error occurred'));
     }
 });
 </script>

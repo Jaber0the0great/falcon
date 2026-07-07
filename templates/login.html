@@ -32,13 +32,14 @@ document.getElementById('login-form').addEventListener('submit', async (e) => {
     });
     const data = await res.json();
     if(data.success) {
-        if(data.is_admin) {
+        if(data.data.is_admin) {
             window.location.href = '/admin/';
         } else {
             window.location.href = '/';
         }
     } else {
-        alert(data.error);
+        const err = data.error;
+        alert(typeof err === 'string' ? err : (err?.message || 'An error occurred'));
     }
 });
 </script>

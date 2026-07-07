@@ -1,0 +1,66 @@
+<div class="admin-sidebar" role="navigation" aria-label="Admin Navigation">
+  <div class="d-flex align-items-center mb-4 px-2">
+    <span class="fs-4 fw-bold text-primary" style="letter-spacing: 0.5px;">🦅 Falcon Admin</span>
+  </div>
+  <hr class="sidebar-divider">
+
+  {{ sidebar_main_content | safe }}
+
+  <hr class="sidebar-divider">
+
+  <div class="dev-center-header px-2 mb-2" onclick="toggleDevCenter()" style="cursor: pointer; user-select: none;">
+    <span class="text-secondary" style="font-size: 0.7rem; font-weight: 600; letter-spacing: 1px; text-transform: uppercase;">
+      <span id="dev-center-arrow">&#9660;</span> Developer Center
+    </span>
+  </div>
+
+  <div id="dev-center-items">
+    <a href="/admin/db-import" class="nav-btn {{ 'active' if active_sidebar == 'db-import' else '' }}">
+      &#128736;&#65039; Database Import
+    </a>
+    <a href="/admin/backup-center" class="nav-btn {{ 'active' if active_sidebar == 'backup-center' else '' }}">
+      &#128190; Backup &amp; Restore
+    </a>
+    <a href="#" class="nav-btn" style="opacity: 0.5; pointer-events: none; cursor: not-allowed;" tabindex="-1" aria-disabled="true">
+      &#128200; Database Statistics
+      <span class="ms-auto" style="font-size: 0.65rem; color: #64748b;">Soon</span>
+    </a>
+    <a href="#" class="nav-btn" style="opacity: 0.5; pointer-events: none; cursor: not-allowed;" tabindex="-1" aria-disabled="true">
+      &#10084;&#65039; System Health
+      <span class="ms-auto" style="font-size: 0.65rem; color: #64748b;">Soon</span>
+    </a>
+    <a href="#" class="nav-btn" style="opacity: 0.5; pointer-events: none; cursor: not-allowed;" tabindex="-1" aria-disabled="true">
+      &#128220; Audit Logs
+      <span class="ms-auto" style="font-size: 0.65rem; color: #64748b;">Soon</span>
+    </a>
+  </div>
+  <style>
+  .sidebar-divider { border-color: rgba(255,255,255,0.1); margin: 1rem 0; }
+  </style>
+  <script>
+  function toggleDevCenter() {
+    const items = document.getElementById('dev-center-items');
+    const arrow = document.getElementById('dev-center-arrow');
+    if (items.style.display === 'none') {
+      items.style.display = '';
+      arrow.innerHTML = '&#9660;';
+      localStorage.setItem('dev-center-collapsed', 'false');
+    } else {
+      items.style.display = 'none';
+      arrow.innerHTML = '&#9654;';
+      localStorage.setItem('dev-center-collapsed', 'true');
+    }
+  }
+  document.addEventListener('DOMContentLoaded', function() {
+    if (localStorage.getItem('dev-center-collapsed') === 'true') {
+      document.getElementById('dev-center-items').style.display = 'none';
+      document.getElementById('dev-center-arrow').innerHTML = '&#9654;';
+    }
+  });
+  </script>
+
+  <hr class="sidebar-divider">
+  <a href="/admin/logout" class="nav-btn text-danger text-decoration-none" style="margin-bottom: 0;">
+    <i class="bi bi-box-arrow-right"></i> Logout
+  </a>
+</div>
