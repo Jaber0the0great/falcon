@@ -24,6 +24,9 @@ logger = logging.getLogger(__name__)
 # Per-user per-event rate limit state: (user_id, event) -> deque of timestamps
 _rate_history = {}
 
+# Will be bound in register_events
+check_away_users = None
+
 def _check_rate_limit(event, user_id):
     """Return True if this event is within the configured rate limit."""
     max_per_second = SOCKET_IO_RATE_LIMITS.get(event, 0)
@@ -271,8 +274,9 @@ def register_events(socketio):
             debounced_broadcast()
 
     # ── Away detection (called from background scheduler) ─────────────
+    global check_away_users
 
-    def check_away_users():
+    def _check_away_users():
         """Mark users as Away if no heartbeat for AWAY_TIMEOUT_SECONDS."""
         threshold = datetime.utcnow() - timedelta(seconds=AWAY_TIMEOUT_SECONDS)
         changed = []
@@ -290,6 +294,8 @@ def register_events(socketio):
         if changed:
             db.session.commit()
             debounced_broadcast()
+
+    check_away_users = _check_away_users
 
     # ── Auto-busy on WebRTC call ──────────────────────────────────────
 
