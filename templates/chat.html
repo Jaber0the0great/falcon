@@ -1213,8 +1213,8 @@
             </div>
             <div class="modal-body" style="background-color: var(--bg-dark);">
                 <!-- Dummy hidden inputs to intercept browser autocomplete/autofill heuristics -->
-                <input type="text" name="chrome_autocomplete_dummy_username" style="display:none;" tabindex="-1">
-                <input type="password" name="chrome_autocomplete_dummy_password" style="display:none;" tabindex="-1">
+                <input type="text" name="chrome_autocomplete_dummy_username" style="position: absolute; top: -9999px; left: -9999px; width: 1px; height: 1px; opacity: 0; pointer-events: none;" tabindex="-1">
+                <input type="password" name="chrome_autocomplete_dummy_password" style="position: absolute; top: -9999px; left: -9999px; width: 1px; height: 1px; opacity: 0; pointer-events: none;" tabindex="-1">
 
                 <!-- Profile Section -->
                 <div class="mb-4">
@@ -1222,7 +1222,7 @@
                     <div class="mb-3">
                         <label class="form-label small text-secondary">Username</label>
                         <div class="input-group">
-                            <input type="text" id="settings-username" class="form-control bg-dark text-white border-secondary" value="" maxlength="50">
+                            <input type="text" id="settings-username" class="form-control bg-dark text-white border-secondary" value="" maxlength="50" autocomplete="off">
                             <button id="settings-rename-btn" class="btn btn-primary" disabled>Rename</button>
                         </div>
                         <div id="settings-rename-status" class="small mt-1"></div>
@@ -1235,15 +1235,15 @@
                     <h6 class="text-secondary mb-3"><i class="bi bi-shield-lock me-2"></i>Security</h6>
                     <div class="mb-3">
                         <label class="form-label small text-secondary">Current Password</label>
-                        <input type="password" id="settings-current-pw" class="form-control bg-dark text-white border-secondary">
+                        <input type="password" id="settings-current-pw" class="form-control bg-dark text-white border-secondary" autocomplete="new-password">
                     </div>
                     <div class="mb-3">
                         <label class="form-label small text-secondary">New Password</label>
-                        <input type="password" id="settings-new-pw" class="form-control bg-dark text-white border-secondary">
+                        <input type="password" id="settings-new-pw" class="form-control bg-dark text-white border-secondary" autocomplete="new-password">
                     </div>
                     <div class="mb-3">
                         <label class="form-label small text-secondary">Confirm New Password</label>
-                        <input type="password" id="settings-confirm-pw" class="form-control bg-dark text-white border-secondary">
+                        <input type="password" id="settings-confirm-pw" class="form-control bg-dark text-white border-secondary" autocomplete="new-password">
                     </div>
                     <div id="settings-pw-status" class="small mb-2"></div>
                     <button id="settings-pw-btn" class="btn btn-warning btn-sm">Change Password</button>
@@ -1316,8 +1316,12 @@
 
 <!-- External Scripts with v=35 to strictly break cache -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.js"></script>
+{% if use_minified_assets %}
+<script src="/static/dist/js/bundle.min.js"></script>
+{% else %}
 <script src="/static/js/socket.js?v=35"></script>
 <script src="/static/js/webrtc.js?v=35"></script>
 <script src="/static/js/app.js?v=35"></script>
 <script src="/static/js/settings.js?v=35"></script>
+{% endif %}
 {% endblock %}

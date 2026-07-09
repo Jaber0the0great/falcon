@@ -270,6 +270,10 @@ def _row_to_model(row, table_name, Model, db, password):
         user.status = data.get("status", "Available")
         user.is_banned = data.get("is_banned", False)
         user.is_admin = data.get("is_admin", False)
+        if "last_seen" in data:
+            user.last_seen = data["last_seen"]
+        if "created_at" in data:
+            user.created_at = data["created_at"]
         return user
 
     if table_name == "message":

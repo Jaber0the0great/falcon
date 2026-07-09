@@ -48,15 +48,11 @@ function formatLastSeenRelative(isoStr) {
         const nowZero = new Date(now.getFullYear(), now.getMonth(), now.getDate());
         const diffDays = Math.floor((nowZero.getTime() - dateZero.getTime()) / (1000 * 60 * 60 * 24));
         
-        if (diffDays === 0) {
-            if (diffSec < 60) return 'Just now';
-            const diffMin = Math.floor(diffSec / 60);
-            if (diffMin < 60) return `${diffMin} minute${diffMin !== 1 ? 's' : ''} ago`;
-            const diffHr = Math.floor(diffMin / 60);
-            return `${diffHr} hour${diffHr !== 1 ? 's' : ''} ago`;
-        }
-        
         const timeStr = date.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+        
+        if (diffDays === 0) {
+            return `Today at ${timeStr}`;
+        }
         
         if (diffDays === 1) {
             return `Yesterday at ${timeStr}`;
@@ -601,6 +597,16 @@ socket.on('message_status', (data) => {
             st.style.color = 'rgba(255,255,255,0.6)';
         }
     }
+    // Update cache
+    if (window.chatHistoryCache) {
+        for (const target in window.chatHistoryCache) {
+            const cachedChat = window.chatHistoryCache[target];
+            const msg = cachedChat.messages.find(m => m.msg_id === data.msg_id);
+            if (msg) {
+                msg.status = data.status;
+            }
+        }
+    }
 });
 
 socket.on('message_deleted', (data) => {
@@ -619,12 +625,36 @@ socket.on('message_deleted', (data) => {
             window.updateSelectionUI();
         }
     }
+    // Remove from client history cache
+    if (window.chatHistoryCache) {
+        for (const target in window.chatHistoryCache) {
+            const cached = window.chatHistoryCache[target];
+            const originalLength = cached.messages.length;
+            cached.messages = cached.messages.filter(m => m.msg_id !== data.msg_id);
+            if (cached.messages.length < originalLength) {
+                cached.total -= (originalLength - cached.messages.length);
+                if (target === currentTarget && window.totalMessagesForCurrentTarget !== null) {
+                    window.totalMessagesForCurrentTarget = cached.total;
+                }
+            }
+        }
+    }
 });
 
 // Live reaction updates — server broadcasts reaction_update after a toggle
 socket.on('reaction_update', (data) => {
     if (typeof window.applyReactions === 'function') {
         window.applyReactions(data.msg_id, data.reactions);
+    }
+    // Update cache
+    if (window.chatHistoryCache) {
+        for (const target in window.chatHistoryCache) {
+            const cachedChat = window.chatHistoryCache[target];
+            const msg = cachedChat.messages.find(m => m.msg_id === data.msg_id);
+            if (msg) {
+                msg.reactions = data.reactions;
+            }
+        }
     }
 });
 

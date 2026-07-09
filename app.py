@@ -89,6 +89,13 @@ def create_app(config_class=Config):
     from sockets.events import register_events
     register_events(socketio)
 
+    @app.context_processor
+    def inject_asset_helpers():
+        import os
+        dist_dir = os.path.join(app.static_folder, 'dist')
+        use_minified = os.path.exists(os.path.join(dist_dir, 'js', 'bundle.min.js'))
+        return dict(use_minified_assets=use_minified)
+
     with app.app_context():
         import sqlite3
         db_path = app.config['SQLALCHEMY_DATABASE_URI'].replace('sqlite:///', '')

@@ -209,28 +209,132 @@ function buildMessageHtml(packet) {
     </div>`;
 }
 
+window.chatHistoryCache = {};
+window.totalMessagesForCurrentTarget = null;
+let isLoadingHistory = false;
+
 async function loadHistory() {
     if (typeof window.disableSelectionMode === 'function') {
         window.disableSelectionMode();
     }
     window.messagesCache = {};
-    const res = await fetch(`/api/history?target=${currentTarget}`);
-    const data = await res.json();
     const mc = document.getElementById('messages-container');
     if(!mc) return;
     
-    if(data.success) {
+    const target = currentTarget;
+    
+    // 1. Instant display from cache (SWR)
+    if (window.chatHistoryCache[target]) {
+        const cached = window.chatHistoryCache[target];
+        window.totalMessagesForCurrentTarget = cached.total;
         let htmlStr = '';
-        data.data.messages.forEach(packet => {
+        cached.messages.forEach(packet => {
             htmlStr += buildMessageHtml(packet);
         });
         mc.innerHTML = htmlStr;
         mc.scrollTop = mc.scrollHeight;
     } else {
-        mc.innerHTML = '';
+        mc.innerHTML = '<div class="text-center py-5"><div class="spinner-border text-primary" role="status"></div></div>';
+    }
+    
+    // 2. Fetch fresh messages in the background
+    try {
+        const res = await fetch(`/api/history?target=${target}`);
+        const data = await res.json();
+        
+        if (currentTarget !== target) return; // Switched chats in the meantime
+        
+        if(data.success) {
+            window.totalMessagesForCurrentTarget = data.data.total;
+            const isNearBottom = mc.scrollHeight - mc.scrollTop - mc.clientHeight < 150;
+            
+            // Update cache
+            window.chatHistoryCache[target] = {
+                messages: data.data.messages,
+                total: data.data.total
+            };
+            
+            let htmlStr = '';
+            data.data.messages.forEach(packet => {
+                htmlStr += buildMessageHtml(packet);
+            });
+            mc.innerHTML = htmlStr;
+            
+            if (isNearBottom || !window.chatHistoryCache[target]) {
+                mc.scrollTop = mc.scrollHeight;
+            }
+        } else {
+            mc.innerHTML = '';
+        }
+    } catch (e) {
+        console.error("Error loading history:", e);
     }
 }
 window.loadHistory = loadHistory;
+
+async function loadOlderHistory() {
+    const mc = document.getElementById('messages-container');
+    if (!mc || isLoadingHistory) return;
+    
+    const target = currentTarget;
+    const currentOffset = mc.querySelectorAll('.message-row').length;
+    
+    // Check if we have already loaded all messages
+    if (window.totalMessagesForCurrentTarget !== null && currentOffset >= window.totalMessagesForCurrentTarget) {
+        return;
+    }
+    
+    isLoadingHistory = true;
+    
+    // Show spinner at top
+    const loader = document.createElement('div');
+    loader.className = 'text-center py-2 history-loader';
+    loader.innerHTML = '<div class="spinner-border spinner-border-sm text-primary" role="status"></div>';
+    mc.prepend(loader);
+    
+    try {
+        const res = await fetch(`/api/history?target=${target}&offset=${currentOffset}`);
+        const data = await res.json();
+        
+        if (currentTarget !== target) return;
+        
+        if (data.success) {
+            window.totalMessagesForCurrentTarget = data.data.total;
+            const messages = data.data.messages;
+            
+            // Remove loader
+            loader.remove();
+            
+            if (messages.length > 0) {
+                // Record scrollHeight before prepending
+                const oldScrollHeight = mc.scrollHeight;
+                
+                // Prepend messages
+                let htmlStr = '';
+                messages.forEach(packet => {
+                    htmlStr += buildMessageHtml(packet);
+                });
+                mc.insertAdjacentHTML('afterbegin', htmlStr);
+                
+                // Keep scroll position relative to the messages we were viewing
+                mc.scrollTop = mc.scrollHeight - oldScrollHeight;
+                
+                // Update cache
+                if (window.chatHistoryCache[target]) {
+                    window.chatHistoryCache[target].messages = messages.concat(window.chatHistoryCache[target].messages);
+                    window.chatHistoryCache[target].total = data.data.total;
+                }
+            }
+        } else {
+            loader.remove();
+        }
+    } catch (e) {
+        console.error("Error loading older history:", e);
+        loader.remove();
+    } finally {
+        isLoadingHistory = false;
+    }
+}
 
 window.appendMessage = function(packet) {
     const mc = document.getElementById('messages-container');
@@ -238,12 +342,27 @@ window.appendMessage = function(packet) {
     const existing = document.getElementById(`msg-container-${packet.msg_id}`);
     if(existing) return; // Prevent duplicate appends!
     
-    mc.insertAdjacentHTML('beforeend', buildMessageHtml(packet));
-    mc.scrollTop = mc.scrollHeight;
+    // Append to cache
+    const target = packet.to === 'All' ? 'All' : (packet.to === myUsername ? packet.sender : packet.to);
+    if (window.chatHistoryCache[target]) {
+        window.chatHistoryCache[target].messages.push(packet);
+        window.chatHistoryCache[target].total += 1;
+        if (target === currentTarget && window.totalMessagesForCurrentTarget !== null) {
+            window.totalMessagesForCurrentTarget += 1;
+        }
+    }
+    
+    const isCurrentChat = (packet.to === currentTarget || (packet.to !== 'All' && packet.sender === currentTarget));
+    if (isCurrentChat) {
+        const isNearBottom = mc.scrollHeight - mc.scrollTop - mc.clientHeight < 150;
+        mc.insertAdjacentHTML('beforeend', buildMessageHtml(packet));
+        
+        if (isNearBottom || packet.sender === myUsername) {
+            mc.scrollTop = mc.scrollHeight;
+        }
+    }
 
     // Play sound only for the sender's OWN messages (first time only, not on server echo)
-    // Sound is played here in appendMessage which is called directly on send (before server echo)
-    // The server echo will hit the `if(existing) return` guard above, so sound won't double-fire
     if (packet.sender === myUsername) {
         const sendSound = document.getElementById('sound-receive-private');
         if (sendSound) {
@@ -252,6 +371,22 @@ window.appendMessage = function(packet) {
         }
     }
 };
+
+function setupScrollListener() {
+    const mc = document.getElementById('messages-container');
+    if (mc) {
+        mc.addEventListener('scroll', () => {
+            if (mc.scrollTop === 0) {
+                loadOlderHistory();
+            }
+        });
+    }
+}
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', setupScrollListener);
+} else {
+    setupScrollListener();
+}
 
 
 if(document.getElementById('send-btn')) {

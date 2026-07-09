@@ -10,12 +10,20 @@
     <!-- Bootstrap Icons -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    {% if use_minified_assets %}
+    <link rel="stylesheet" href="/static/dist/css/style.min.css">
+    {% else %}
     <link rel="stylesheet" href="/static/css/style.css">
+    {% endif %}
     <style>
         h1, h2, h3, h4, h5, h6, .fw-bold { text-wrap: balance; }
         html { -webkit-text-size-adjust: 100%; }
     </style>
+    {% if use_minified_assets %}
+    <script src="/static/dist/js/csrf.min.js"></script>
+    {% else %}
     <script src="/static/js/csrf.js"></script>
+    {% endif %}
     <script>
         // Resolve 'system' theme immediately to prevent flash
         (function() {

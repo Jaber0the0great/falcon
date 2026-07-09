@@ -1,0 +1,12 @@
+{
+  "name": "falcon-web-chat",
+  "version": "1.0.0",
+  "description": "Falcon Web Chat static asset bundler",
+  "main": "build.js",
+  "scripts": {
+    "build": "node build.js"
+  },
+  "devDependencies": {
+    "esbuild": "^0.20.0"
+  }
+}
