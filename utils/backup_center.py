@@ -125,10 +125,16 @@ def create_full_backup(db_path="database/falcon_web.db", uploads_dir=None, label
     if not os.path.isfile(db_path):
         return {"success": False, "error": f"Database not found: {db_path}"}
 
-    timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S%f")[:19]
+    timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%d_%H-%M-%S")
     prefix = f"{label}_" if label else ""
-    filename = f"{prefix}full_backup_{timestamp}.zip"
+    filename = f"{prefix}Falcon_Backup_{timestamp}.zip"
     dest = os.path.join(target_dir, filename)
+
+    counter = 1
+    while os.path.exists(dest):
+        filename = f"{prefix}Falcon_Backup_{timestamp}_{counter}.zip"
+        dest = os.path.join(target_dir, filename)
+        counter += 1
 
     manifest = build_manifest("full", db_path, uploads_dir)
 
@@ -152,7 +158,7 @@ def create_full_backup(db_path="database/falcon_web.db", uploads_dir=None, label
     manifest["sha256"] = zip_sha256
     _write_sha256_sidecar(dest, zip_sha256)
 
-    manifest_path = dest + ".manifest.json"
+    manifest_path = dest.replace(".zip", "_manifest.json")
     with open(manifest_path, "w") as f:
         json.dump(manifest, f, indent=2)
 

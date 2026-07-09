@@ -313,12 +313,17 @@ def _resolve_batch(rows, table_name, config, existing):
 
 def _get_existing_lookup(Model, table_name):
     try:
+        from models.models import User, Group
         if table_name == "user":
-            return {u.username.lower() for u in Model.query.with_entities(Model.username).all()}
+            users = {u.username.lower() for u in User.query.with_entities(User.username).all()}
+            groups = {g.name.lower() for g in Group.query.with_entities(Group.name).all()}
+            return users | groups
         elif table_name == "message":
             return {m.msg_id for m in Model.query.with_entities(Model.msg_id).all() if m.msg_id}
         elif table_name == "group":
-            return {g.name.lower() for g in Model.query.with_entities(Model.name).all()}
+            users = {u.username.lower() for u in User.query.with_entities(User.username).all()}
+            groups = {g.name.lower() for g in Group.query.with_entities(Group.name).all()}
+            return users | groups
         else:
             return set()
     except Exception:

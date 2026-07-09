@@ -55,10 +55,16 @@ def create_backup(db_path="database/falcon_web.db", label=None, backup_dir=None,
         logger.error("Database not found: %s", db_path)
         return {"success": False, "error": f"Database not found: {db_path}"}
 
-    timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S%f")[:19]
+    timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%d_%H-%M-%S")
     prefix = f"{label}_" if label else ""
-    filename = f"{prefix}{os.path.basename(db_path)}.backup.{timestamp}"
+    filename = f"{prefix}Falcon_Backup_{timestamp}.db"
     dest = os.path.join(target_dir, filename)
+    
+    counter = 1
+    while os.path.exists(dest):
+        filename = f"{prefix}Falcon_Backup_{timestamp}_{counter}.db"
+        dest = os.path.join(target_dir, filename)
+        counter += 1
 
     try:
         source_conn = sqlite3.connect(db_path)

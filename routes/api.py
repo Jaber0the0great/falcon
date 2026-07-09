@@ -65,13 +65,18 @@ def get_history():
     offset = request.args.get('offset', 0, type=int)
     limit = min(limit, 200)
 
+    from models.models import MessageVisibility
     if other_name == "All":
-        base = Message.query.filter(
+        base = Message.query.outerjoin(
+            MessageVisibility,
+            (Message.msg_id == MessageVisibility.msg_id) & (MessageVisibility.username == my_name)
+        ).filter(
             (Message.recipient == "All") &
-            ~((Message.sender == my_name) & (Message.deleted_by_sender == True))
+            (MessageVisibility.id == None)
         )
         total = base.count()
-        messages = base.order_by(Message.id.asc()).limit(limit).offset(offset).all()
+        messages = base.order_by(Message.id.desc()).limit(limit).offset(offset).all()
+        messages.reverse()
     else:
         group = Group.query.filter_by(name=other_name).first()
         if group:
@@ -79,21 +84,28 @@ def get_history():
             if not is_member:
                 return error_response(ErrorCode.GROUP_NOT_MEMBER[0], "Unauthorized", status_code=403)
 
-            base = Message.query.filter(
+            base = Message.query.outerjoin(
+                MessageVisibility,
+                (Message.msg_id == MessageVisibility.msg_id) & (MessageVisibility.username == my_name)
+            ).filter(
                 (Message.recipient == other_name) &
-                ~((Message.sender == my_name) & (Message.deleted_by_sender == True))
+                (MessageVisibility.id == None)
             )
             total = base.count()
-            messages = base.order_by(Message.id.asc()).limit(limit).offset(offset).all()
+            messages = base.order_by(Message.id.desc()).limit(limit).offset(offset).all()
+            messages.reverse()
         else:
-            base = Message.query.filter(
+            base = Message.query.outerjoin(
+                MessageVisibility,
+                (Message.msg_id == MessageVisibility.msg_id) & (MessageVisibility.username == my_name)
+            ).filter(
                 (((Message.sender == my_name) & (Message.recipient == other_name)) |
                  ((Message.sender == other_name) & (Message.recipient == my_name))) &
-                ~((Message.sender == my_name) & (Message.deleted_by_sender == True)) &
-                ~((Message.recipient == my_name) & (Message.deleted_by_recipient == True))
+                (MessageVisibility.id == None)
             )
             total = base.count()
-            messages = base.order_by(Message.id.asc()).limit(limit).offset(offset).all()
+            messages = base.order_by(Message.id.desc()).limit(limit).offset(offset).all()
+            messages.reverse()
 
     result = []
     for msg in messages:
@@ -335,7 +347,7 @@ def create_group():
         
     # Check if a group or user with this name already exists (since they share the namespace in messages)
     existing_group = Group.query.filter_by(name=group_name).first()
-    existing_user = User.query.filter(User.username.ilike(group_name), User.is_admin != True).first()
+    existing_user = User.query.filter(User.username.ilike(group_name)).first()
     if existing_group or existing_user:
         return error_response(ErrorCode.GROUP_CREATE_FAILED[0], "Name already taken", status_code=400)
         

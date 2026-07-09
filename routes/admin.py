@@ -282,9 +282,10 @@ def rename_group():
         
         # Check conflict
         if new_name.lower() != old_name.lower():
-            conflict = Group.query.filter(func.lower(Group.name) == func.lower(new_name)).first()
-            if conflict:
-                return error_response(ErrorCode.GROUP_NAME_RESERVED[0], f"Group name '{new_name}' already exists.", status_code=409)
+            conflict_group = Group.query.filter(func.lower(Group.name) == func.lower(new_name)).first()
+            conflict_user = User.query.filter(func.lower(User.username) == func.lower(new_name)).first()
+            if conflict_group or conflict_user:
+                return error_response(ErrorCode.GROUP_NAME_RESERVED[0], f"Group name '{new_name}' is already taken.", status_code=409)
                 
         g.name = new_name
         

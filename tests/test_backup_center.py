@@ -185,7 +185,7 @@ class TestBackupCenterFullBackup(unittest.TestCase):
 
     def test_full_backup_sidecar_manifest(self):
         result = create_full_backup(db_path=self.db_path, uploads_dir=self.uploads_dir, backup_dir=self.backup_dir)
-        manifest_path = result["path"] + ".manifest.json"
+        manifest_path = result["path"].replace(".zip", "_manifest.json")
         self.assertTrue(os.path.isfile(manifest_path))
         with open(manifest_path) as f:
             manifest = json.loads(f.read())

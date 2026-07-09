@@ -26,7 +26,8 @@ class TestBackup(unittest.TestCase):
         result = create_backup(db_path=self.db_path, backup_dir=self.backup_dir)
         self.assertTrue(result["success"])
         self.assertTrue(os.path.isfile(result["path"]))
-        self.assertIn("test.db.backup.", result["filename"])
+        self.assertIn("Falcon_Backup_", result["filename"])
+        self.assertTrue(result["filename"].endswith(".db"))
 
     def test_create_backup_content(self):
         result = create_backup(db_path=self.db_path, backup_dir=self.backup_dir)

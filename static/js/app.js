@@ -1488,3 +1488,21 @@ if (document.getElementById('user-search-input')) {
     };
 }
 
+// Force search input clear on page load to prevent browser autofill bugs
+function clearSearchInput() {
+    const searchInput = document.getElementById('user-search-input');
+    if (searchInput) {
+        searchInput.value = '';
+        searchInput.dispatchEvent(new Event('input'));
+    }
+}
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', clearSearchInput);
+} else {
+    clearSearchInput();
+}
+window.addEventListener('load', () => {
+    setTimeout(clearSearchInput, 50);
+    setTimeout(clearSearchInput, 200);
+});
+

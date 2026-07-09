@@ -80,3 +80,15 @@ class UsernameHistory(db.Model):
     new_username = db.Column(db.String(80), nullable=False)
     changed_at = db.Column(db.DateTime, default=datetime.utcnow)
 
+
+class MessageVisibility(db.Model):
+    __tablename__ = 'message_visibility'
+    id = db.Column(db.Integer, primary_key=True)
+    msg_id = db.Column(db.String(100), db.ForeignKey('message.msg_id', ondelete='CASCADE'), nullable=False, index=True)
+    username = db.Column(db.String(80), nullable=False)
+
+    __table_args__ = (
+        db.UniqueConstraint('msg_id', 'username', name='uq_msg_id_username'),
+    )
+
+

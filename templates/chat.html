@@ -27,6 +27,23 @@
         --msg-other: #e2e8f0;
         --border-color: #cbd5e1;
     }
+
+    [data-theme="light"] .form-control,
+    [data-theme="light"] .form-select {
+        background-color: var(--bg-chat) !important;
+        color: var(--text-primary) !important;
+        border-color: var(--border-color) !important;
+    }
+    
+    [data-theme="light"] .form-control::placeholder,
+    [data-theme="light"] .chat-input::placeholder,
+    [data-theme="light"] .search-input::placeholder {
+        color: #94a3b8 !important;
+    }
+    
+    [data-theme="light"] .btn-close-white {
+        filter: invert(1) grayscale(100%) brightness(0) !important;
+    }
     
     body, html {
         height: 100%;
@@ -81,7 +98,7 @@
         border-radius: 20px;
         border: none;
         background-color: var(--bg-dark);
-        color: white;
+        color: var(--text-primary);
         outline: none;
     }
 
@@ -210,7 +227,7 @@
         border-radius: 25px;
         border: none;
         background-color: var(--bg-dark);
-        color: white;
+        color: var(--text-primary);
         outline: none;
         font-size: 1rem;
     }
@@ -702,12 +719,12 @@
         </div>
         
         <div class="search-bar" role="search">
-            <input type="text" id="user-search-input" class="search-input" placeholder="" aria-label="Search users and rooms" autocomplete="off">
+            <input type="text" id="user-search-input" class="search-input" placeholder="Search..." aria-label="Search users and rooms" autocomplete="off">
         </div>
         
         <div style="padding: 0 15px 10px 15px;">
             <button class="btn btn-sm btn-primary w-100" id="btn-create-group-modal" style="border-radius: 20px;" type="button">
-                <i class="bi bi-plus-circle me-1"></i> Create Group (إنشاء مجموعة)
+                <i class="bi bi-plus-circle me-1"></i> Create Group
             </button>
         </div>
         
@@ -1195,6 +1212,9 @@
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body" style="background-color: var(--bg-dark);">
+                <!-- Dummy hidden inputs to intercept browser autocomplete/autofill heuristics -->
+                <input type="text" name="chrome_autocomplete_dummy_username" style="display:none;" tabindex="-1">
+                <input type="password" name="chrome_autocomplete_dummy_password" style="display:none;" tabindex="-1">
 
                 <!-- Profile Section -->
                 <div class="mb-4">

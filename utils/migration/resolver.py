@@ -82,12 +82,15 @@ def detect_conflicts(source_conn, target_session, target_models, enabled_entitie
 
 def _detect_user_conflicts(source_conn, target_session, target_models, report):
     User = target_models[ModelKeys.USER]
+    Group = target_models.get(ModelKeys.GROUP)
     existing_usernames = {u.username.lower() for u in User.query.with_entities(User.username).all()}
+    existing_group_names = {g.name.lower() for g in Group.query.with_entities(Group.name).all()} if Group else set()
+    merged = existing_usernames | existing_group_names
 
     source_usernames = _get_source_usernames(source_conn)
-    conflicts = [u for u in source_usernames if u.lower() in existing_usernames]
+    conflicts = [u for u in source_usernames if u.lower() in merged]
 
-    report.add_entity("user", len(source_usernames), conflicts, {"existing_usernames": sorted(existing_usernames)})
+    report.add_entity("user", len(source_usernames), conflicts, {"existing_usernames": sorted(merged)})
 
 
 def _detect_message_conflicts(source_conn, target_session, target_models, report):
@@ -101,13 +104,16 @@ def _detect_message_conflicts(source_conn, target_session, target_models, report
 
 
 def _detect_group_conflicts(source_conn, target_session, target_models, report):
+    User = target_models.get(ModelKeys.USER)
     Group = target_models[ModelKeys.GROUP]
     existing_names = {g.name.lower() for g in Group.query.with_entities(Group.name).all()}
+    existing_usernames = {u.username.lower() for u in User.query.with_entities(User.username).all()} if User else set()
+    merged = existing_names | existing_usernames
 
     source_names = _get_source_group_names(source_conn)
-    conflicts = [n for n in source_names if n.lower() in existing_names]
+    conflicts = [n for n in source_names if n.lower() in merged]
 
-    report.add_entity("group", len(source_names), conflicts, {"existing_names": sorted(existing_names)})
+    report.add_entity("group", len(source_names), conflicts, {"existing_names": sorted(merged)})
 
 
 def _get_source_usernames(conn):
@@ -159,12 +165,14 @@ def generate_preview(source_conn, target_session, target_models, config):
     existing_users = User.query.count() if User else 0
     incoming_users = len(_get_source_usernames(source_conn))
     existing_usernames = {u.username.lower() for u in User.query.with_entities(User.username).all()} if User else set()
+    existing_group_names = {g.name.lower() for g in Group.query.with_entities(Group.name).all()} if Group else set()
+    merged_usernames = existing_usernames | existing_group_names
 
     will_import = 0
     will_skip = 0
     will_rename = 0
     for u in _get_source_usernames(source_conn):
-        if u.lower() in existing_usernames:
+        if u.lower() in merged_usernames:
             if policies.get("user") == "skip":
                 will_skip += 1
             elif policies.get("user") == "rename":
@@ -188,7 +196,8 @@ def generate_preview(source_conn, target_session, target_models, config):
         existing_groups = Group.query.count()
         incoming_groups = len(_get_source_group_names(source_conn))
         existing_names = {g.name.lower() for g in Group.query.with_entities(Group.name).all()}
-        will_skip_g = sum(1 for n in _get_source_group_names(source_conn) if n.lower() in existing_names)
+        merged_names = existing_names | existing_usernames
+        will_skip_g = sum(1 for n in _get_source_group_names(source_conn) if n.lower() in merged_names)
         will_import_g = incoming_groups - will_skip_g
         report.add_entity("group", existing_groups, incoming_groups, will_import_g, will_skip_g)
 

@@ -111,6 +111,29 @@ class TestDetectConflicts(unittest.TestCase):
         report = detect_conflicts(self.source_conn, None, self.target_models)
         self.assertTrue(report.has_conflicts())
 
+    def test_detect_cross_namespace_conflicts(self):
+        # Add a source group named "alice" (which conflicts with target user "alice")
+        # and a source user named "general" (which conflicts with target group "general")
+        conn = sqlite3.connect(os.path.join(self.tmp, "cross_source.db"))
+        c = conn.cursor()
+        c.execute("CREATE TABLE messages (sender TEXT, recipient TEXT, msg_id TEXT)")
+        c.execute("INSERT INTO messages VALUES ('general', 'bob', 'm100')")
+        c.execute("CREATE TABLE `group` (name TEXT)")
+        c.execute("INSERT INTO `group` VALUES ('alice')")
+        conn.commit()
+        
+        report = detect_conflicts(conn, None, self.target_models)
+        conn.close()
+        
+        # User "general" (incoming) should conflict with existing group "general"
+        self.assertIn("user", report.entities)
+        self.assertIn("general", report.entities["user"]["conflicts"])
+        
+        # Group "alice" (incoming) should conflict with existing user "alice"
+        self.assertIn("group", report.entities)
+        self.assertIn("alice", report.entities["group"]["conflicts"])
+
+
 
 class TestGeneratePreview(unittest.TestCase):
     def setUp(self):

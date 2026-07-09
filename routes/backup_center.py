@@ -91,7 +91,14 @@ def api_download():
         if b["filename"] == filename:
             if not os.path.isfile(b["path"]):
                 return error_response(ErrorCode.VALIDATION_MISSING_FIELD[0], "File not found on disk", status_code=404)
-            return send_file(b["path"], as_attachment=True, download_name=filename)
+            mimetype = None
+            if filename.endswith(".db"):
+                mimetype = "application/x-sqlite3"
+            elif filename.endswith(".zip"):
+                mimetype = "application/zip"
+            elif filename.endswith(".json"):
+                mimetype = "application/json"
+            return send_file(b["path"], as_attachment=True, download_name=filename, mimetype=mimetype)
 
     return error_response(ErrorCode.VALIDATION_MISSING_FIELD[0], "Backup not found", status_code=404)
 
@@ -171,7 +178,7 @@ def api_delete():
                 sha_path = b["path"] + ".sha256"
                 if os.path.isfile(sha_path):
                     os.remove(sha_path)
-                manifest_path = b["path"] + ".manifest.json"
+                manifest_path = b["path"].replace(".zip", "_manifest.json")
                 if os.path.isfile(manifest_path):
                     os.remove(manifest_path)
                 os.remove(b["path"])

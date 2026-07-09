@@ -581,7 +581,7 @@ socket.on('new_message', (data) => {
         } else if (typeof window.loadHistory === 'function') {
             window.loadHistory();
         }
-        if(data.to !== 'All' && data.sender !== myUsername) {
+        if(data.to !== 'All' && data.sender !== myUsername && !window.isGroupName(data.to)) {
             socket.emit('message_read', {msg_id: data.msg_id, to: data.sender});
         }
     }
@@ -655,6 +655,11 @@ socket.on('system', (data) => {
 // --- CUSTOM GROUPS SYSTEM INTERACTION ---
 
 window.allGroupsList = [];
+
+window.isGroupName = function(name) {
+    if (!name || name === 'All') return false;
+    return !!(window.allGroupsList && window.allGroupsList.some(g => g.name === name));
+};
 
 async function loadGroupsList() {
     try {

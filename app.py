@@ -181,6 +181,33 @@ def create_app(config_class=Config):
             db.session.rollback()
             logger.warning("Could not create ix_message_sender_recipient_id: %s", e)
 
+        # Migrate existing deleted flags to message_visibility table
+        try:
+            from models.models import Message, MessageVisibility
+            # Migrate sender deletions
+            sender_deletes = Message.query.filter_by(deleted_by_sender=True).all()
+            for m in sender_deletes:
+                exists = MessageVisibility.query.filter_by(msg_id=m.msg_id, username=m.sender).first()
+                if not exists:
+                    db.session.add(MessageVisibility(msg_id=m.msg_id, username=m.sender))
+            
+            # Migrate recipient deletions (only for private chats)
+            recipient_deletes = Message.query.filter_by(deleted_by_recipient=True).all()
+            for m in recipient_deletes:
+                if m.recipient != 'All':
+                    from models.models import Group
+                    is_group = Group.query.filter_by(name=m.recipient).first() is not None
+                    if not is_group:
+                        exists = MessageVisibility.query.filter_by(msg_id=m.msg_id, username=m.recipient).first()
+                        if not exists:
+                            db.session.add(MessageVisibility(msg_id=m.msg_id, username=m.recipient))
+            db.session.commit()
+            logger.info("Migrated message deleted flags to message_visibility table.")
+        except Exception as e:
+            db.session.rollback()
+            logger.error("Failed to migrate message deleted flags: %s", e)
+
+
 
         # Seed admin user from environment variables (skip during testing)
         if not app.config.get('TESTING'):

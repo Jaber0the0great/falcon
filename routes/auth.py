@@ -75,8 +75,10 @@ def register():
     if username.lower() in RESERVED_USERNAMES:
         return error_response(ErrorCode.VALIDATION_INVALID_INPUT[0], "This username is reserved", status_code=400)
 
-    if User.query.filter(func.lower(User.username) == func.lower(username)).first():
-        logger.info("Registration failed: username '%s' already exists.", username)
+    from models.models import Group
+    if User.query.filter(func.lower(User.username) == func.lower(username)).first() or \
+       Group.query.filter(func.lower(Group.name) == func.lower(username)).first():
+        logger.info("Registration failed: username '%s' already exists or conflicts with group name.", username)
         return error_response(ErrorCode.AUTH_USERNAME_EXISTS[0], "Registration failed", status_code=400)
 
     user = User(username=username)

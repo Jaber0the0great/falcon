@@ -449,8 +449,21 @@ def register_events(socketio):
                 reply_to=data.get('reply_to'),
                 reply_content=encrypt_text(data.get('reply_content'))
             )
-            db.session.add(msg)
-            db.session.commit()
+            try:
+                db.session.add(msg)
+                db.session.commit()
+            except Exception as e:
+                db.session.rollback()
+                logger.exception("Database error occurred while persisting message: %s", e)
+                error_ack = {
+                    "type": "ack",
+                    "sender": "Server",
+                    "to": sender,
+                    "msg_id": data.get('msg_id'),
+                    "status": "failed"
+                }
+                emit('new_message', error_ack, room=sender)
+                return
 
         # Auto-stop typing for this conversation after sending
         if sender != 'Server':
@@ -534,12 +547,8 @@ def register_events(socketio):
         my_username = user.username
         msg_id = data.get('msg_id')
         emoji  = data.get('emoji')
-        target = data.get('to', 'All')
 
         if not msg_id or not emoji:
-            return
-
-        if not _can_send_to_target(target, my_username):
             return
 
         msg = Message.query.filter_by(msg_id=msg_id).first()
@@ -550,6 +559,15 @@ def register_events(socketio):
             group = Group.query.filter_by(name=msg.recipient).first()
             if not group or not GroupMember.query.filter_by(group_name=msg.recipient, username=my_username).first():
                 return
+
+        # Resolve target from message itself, not client input
+        target = msg.recipient
+        if target != 'All':
+            # Check if target is a group
+            is_group = bool(Group.query.filter_by(name=target).first())
+            if not is_group:
+                # Private message: target is the other user
+                target = msg.recipient if msg.sender == my_username else msg.sender
 
         import json as _json
         try:
@@ -612,13 +630,24 @@ def register_events(socketio):
             if canonical_target != 'All' and username != canonical_target:
                 emit('message_deleted', {'msg_id': msg_id, 'to': canonical_target}, room=username)
         elif delete_type == 'me':
-            if is_sender:
-                msg.deleted_by_sender = True
-            else:
-                msg.deleted_by_recipient = True
-                
-            if msg.deleted_by_sender and (msg.deleted_by_recipient or msg.recipient == 'All'):
-                db.session.delete(msg)
+            from models.models import MessageVisibility
+            # Check if this visibility entry already exists to prevent integrity errors
+            exists = MessageVisibility.query.filter_by(msg_id=msg_id, username=username).first()
+            if not exists:
+                visibility = MessageVisibility(msg_id=msg_id, username=username)
+                db.session.add(visibility)
+
+            # Garbage Collection for Private Chats (Optional, optimization):
+            # If both parties in a private chat have deleted the message, delete it permanently.
+            if msg.recipient != 'All':
+                is_group = Group.query.filter_by(name=msg.recipient).first() is not None
+                if not is_group:
+                    other_user = msg.recipient if is_sender else msg.sender
+                    already_hidden_by_other = MessageVisibility.query.filter_by(
+                        msg_id=msg_id, username=other_user
+                    ).first() is not None
+                    if already_hidden_by_other:
+                        db.session.delete(msg)  # Cascades deletion of visibility rows
             db.session.commit()
             
             # Emit deletion to the deleting user only
