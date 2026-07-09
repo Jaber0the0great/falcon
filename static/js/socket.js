@@ -597,16 +597,6 @@ socket.on('message_status', (data) => {
             st.style.color = 'rgba(255,255,255,0.6)';
         }
     }
-    // Update cache
-    if (window.chatHistoryCache) {
-        for (const target in window.chatHistoryCache) {
-            const cachedChat = window.chatHistoryCache[target];
-            const msg = cachedChat.messages.find(m => m.msg_id === data.msg_id);
-            if (msg) {
-                msg.status = data.status;
-            }
-        }
-    }
 });
 
 socket.on('message_deleted', (data) => {
@@ -625,19 +615,8 @@ socket.on('message_deleted', (data) => {
             window.updateSelectionUI();
         }
     }
-    // Remove from client history cache
-    if (window.chatHistoryCache) {
-        for (const target in window.chatHistoryCache) {
-            const cached = window.chatHistoryCache[target];
-            const originalLength = cached.messages.length;
-            cached.messages = cached.messages.filter(m => m.msg_id !== data.msg_id);
-            if (cached.messages.length < originalLength) {
-                cached.total -= (originalLength - cached.messages.length);
-                if (target === currentTarget && window.totalMessagesForCurrentTarget !== null) {
-                    window.totalMessagesForCurrentTarget = cached.total;
-                }
-            }
-        }
+    if (window.totalMessagesForCurrentTarget !== null) {
+        window.totalMessagesForCurrentTarget = Math.max(0, window.totalMessagesForCurrentTarget - 1);
     }
 });
 
@@ -645,16 +624,6 @@ socket.on('message_deleted', (data) => {
 socket.on('reaction_update', (data) => {
     if (typeof window.applyReactions === 'function') {
         window.applyReactions(data.msg_id, data.reactions);
-    }
-    // Update cache
-    if (window.chatHistoryCache) {
-        for (const target in window.chatHistoryCache) {
-            const cachedChat = window.chatHistoryCache[target];
-            const msg = cachedChat.messages.find(m => m.msg_id === data.msg_id);
-            if (msg) {
-                msg.reactions = data.reactions;
-            }
-        }
     }
 });
 

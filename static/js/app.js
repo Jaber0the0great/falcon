@@ -31,10 +31,10 @@ function buildMessageHtml(packet) {
         const isImg = packet.name.match(/\.(jpeg|jpg|gif|png|bmp)$/i);
         const isAudio = packet.name.match(/\.(webm|mp3|wav|ogg|m4a)$/i);
         
-        if(isImg && packet.data) {
+        if(isImg) {
             contentHtml = `
             <div style="position: relative; display: inline-block; max-width: 100%;">
-                <img src="data:image/png;base64,${packet.data}" style="max-width:100%; border-radius:8px; margin-bottom: 5px;" alt="Attached Image">
+                <img src="/api/download/${packet.name}" style="max-width:100%; border-radius:8px; margin-bottom: 5px;" alt="Attached Image" loading="lazy">
                 <div style="display: flex; gap: 5px; margin-top: 5px;">
                     <a href="/api/download/${packet.name}" target="_blank" class="btn btn-sm btn-outline-info" style="font-size: 0.8rem; padding: 2px 6px;">
                         <i class="bi bi-eye"></i> View
@@ -209,7 +209,6 @@ function buildMessageHtml(packet) {
     </div>`;
 }
 
-window.chatHistoryCache = {};
 window.totalMessagesForCurrentTarget = null;
 let isLoadingHistory = false;
 
@@ -223,21 +222,9 @@ async function loadHistory() {
     
     const target = currentTarget;
     
-    // 1. Instant display from cache (SWR)
-    if (window.chatHistoryCache[target]) {
-        const cached = window.chatHistoryCache[target];
-        window.totalMessagesForCurrentTarget = cached.total;
-        let htmlStr = '';
-        cached.messages.forEach(packet => {
-            htmlStr += buildMessageHtml(packet);
-        });
-        mc.innerHTML = htmlStr;
-        mc.scrollTop = mc.scrollHeight;
-    } else {
-        mc.innerHTML = '<div class="text-center py-5"><div class="spinner-border text-primary" role="status"></div></div>';
-    }
+    mc.innerHTML = '<div class="text-center py-5"><div class="spinner-border text-primary" role="status"></div></div>';
     
-    // 2. Fetch fresh messages in the background
+    // Fetch fresh messages
     try {
         const res = await fetch(`/api/history?target=${target}`);
         const data = await res.json();
@@ -248,19 +235,13 @@ async function loadHistory() {
             window.totalMessagesForCurrentTarget = data.data.total;
             const isNearBottom = mc.scrollHeight - mc.scrollTop - mc.clientHeight < 150;
             
-            // Update cache
-            window.chatHistoryCache[target] = {
-                messages: data.data.messages,
-                total: data.data.total
-            };
-            
             let htmlStr = '';
             data.data.messages.forEach(packet => {
                 htmlStr += buildMessageHtml(packet);
             });
             mc.innerHTML = htmlStr;
             
-            if (isNearBottom || !window.chatHistoryCache[target]) {
+            if (isNearBottom) {
                 mc.scrollTop = mc.scrollHeight;
             }
         } else {
@@ -318,12 +299,6 @@ async function loadOlderHistory() {
                 
                 // Keep scroll position relative to the messages we were viewing
                 mc.scrollTop = mc.scrollHeight - oldScrollHeight;
-                
-                // Update cache
-                if (window.chatHistoryCache[target]) {
-                    window.chatHistoryCache[target].messages = messages.concat(window.chatHistoryCache[target].messages);
-                    window.chatHistoryCache[target].total = data.data.total;
-                }
             }
         } else {
             loader.remove();
@@ -342,14 +317,9 @@ window.appendMessage = function(packet) {
     const existing = document.getElementById(`msg-container-${packet.msg_id}`);
     if(existing) return; // Prevent duplicate appends!
     
-    // Append to cache
     const target = packet.to === 'All' ? 'All' : (packet.to === myUsername ? packet.sender : packet.to);
-    if (window.chatHistoryCache[target]) {
-        window.chatHistoryCache[target].messages.push(packet);
-        window.chatHistoryCache[target].total += 1;
-        if (target === currentTarget && window.totalMessagesForCurrentTarget !== null) {
-            window.totalMessagesForCurrentTarget += 1;
-        }
+    if (target === currentTarget && window.totalMessagesForCurrentTarget !== null) {
+        window.totalMessagesForCurrentTarget += 1;
     }
     
     const isCurrentChat = (packet.to === currentTarget || (packet.to !== 'All' && packet.sender === currentTarget));

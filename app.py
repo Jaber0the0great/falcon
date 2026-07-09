@@ -78,6 +78,9 @@ def create_app(config_class=Config):
     from routes.backup_center import backup_center_bp
     from routes.settings import settings_bp
 
+    csrf.exempt(auth_bp)
+    csrf.exempt(api_bp)
+
     app.register_blueprint(auth_bp)
     app.register_blueprint(api_bp)
     app.register_blueprint(main_bp)

@@ -119,7 +119,7 @@ def get_history():
             "duration": msg.duration,
             "size": msg.duration,
             "name": msg.file_name,
-            "data": msg.raw_data,
+            "data": None,
             "status": msg.status,
             "msg_id": msg.msg_id,
             "reactions": msg.reactions,
