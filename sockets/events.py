@@ -426,7 +426,8 @@ def register_events(socketio):
         if ptype not in ('typing', 'ack', 'read', 'reaction', 'system', 'webrtc_signaling'):
             if target != 'All':
                 recipient_user = User.query.filter_by(username=target).first()
-                if recipient_user and recipient_user.status != 'Offline':
+                recipient_is_online = registry.is_online(target)
+                if recipient_user and (recipient_user.status != 'Offline' or recipient_is_online):
                     msg_status = 'delivered'
                 else:
                     msg_status = 'sent'
