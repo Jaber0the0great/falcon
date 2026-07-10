@@ -42,6 +42,7 @@ def login():
         session.clear()
         session['user_id'] = user.id
         session['username'] = user.username
+        session.permanent = True
         user.status = "Available"
         db.session.commit()
 

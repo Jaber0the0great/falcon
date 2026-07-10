@@ -21,7 +21,7 @@ class Config:
     SESSION_COOKIE_HTTPONLY = True
     SESSION_COOKIE_SAMESITE = 'Lax'
     SESSION_COOKIE_NAME = 'falcon_session'
-    PERMANENT_SESSION_LIFETIME = timedelta(hours=24)
+    PERMANENT_SESSION_LIFETIME = timedelta(days=30)
     SESSION_REFRESH_EACH_REQUEST = True
 
     # TURN Server credentials for WebRTC NAT Traversal

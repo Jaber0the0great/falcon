@@ -471,6 +471,38 @@ def save_call_log():
         
     return success_response({"message": "Call log saved successfully"})
 
+@api_bp.route('/calls/history', methods=['GET'])
+@rate_limit(USER_INFO_LIMIT, key_func=user_key)
+def get_call_history():
+    if 'user_id' not in session:
+        return error_response(ErrorCode.AUTH_NOT_AUTHENTICATED[0], "Not authenticated", status_code=401)
+        
+    my_name = session['username']
+    
+    from models.models import MessageVisibility
+    calls = Message.query.outerjoin(
+        MessageVisibility,
+        (Message.msg_id == MessageVisibility.msg_id) & (MessageVisibility.username == my_name)
+    ).filter(
+        Message.msg_type == 'call_log',
+        ((Message.sender == my_name) | (Message.recipient == my_name)),
+        MessageVisibility.id == None
+    ).order_by(Message.id.desc()).all()
+    
+    result = []
+    for c in calls:
+        result.append({
+            "msg_id": c.msg_id,
+            "sender": c.sender,
+            "recipient": c.recipient,
+            "status": c.content,
+            "duration": c.duration or 0,
+            "time": c.time,
+            "created_at": c.created_at.isoformat() + "Z" if c.created_at else None
+        })
+        
+    return success_response({"calls": result})
+
 @api_bp.route('/groups/invite', methods=['POST'])
 @rate_limit(GROUP_INVITE_LIMIT, key_func=user_key)
 def invite_to_group():
@@ -965,6 +997,32 @@ def delete_group():
         
     db.session.commit()
     return success_response({"message": "Group deleted successfully"})
+
+@api_bp.route('/users', methods=['GET'])
+@rate_limit(USER_INFO_LIMIT, key_func=user_key)
+def get_users_list():
+    if 'user_id' not in session:
+        return error_response(ErrorCode.AUTH_NOT_AUTHENTICATED[0], "Not authenticated", status_code=401)
+        
+    my_name = session['username']
+    all_users = User.query.filter(User.is_admin != True, User.username != my_name).order_by(User.username.asc()).all()
+    
+    result = []
+    for u in all_users:
+        unread_count = Message.query.filter(
+            Message.sender == u.username,
+            Message.recipient == my_name,
+            Message.status != 'read'
+        ).count()
+        
+        result.append({
+            "name": u.username,
+            "status": u.status,
+            "last_seen": (u.last_seen.isoformat() + "Z") if u.last_seen else None,
+            "unread_count": unread_count
+        })
+        
+    return success_response({"users": result})
 
 
 
