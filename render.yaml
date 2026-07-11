@@ -1,0 +1,20 @@
+services:
+  - type: web
+    name: falcon-chat
+    runtime: python
+    plan: free
+    buildCommand: "pip install -r requirements.txt"
+    startCommand: "python app.py"
+    envVars:
+      - key: SECRET_KEY
+        generateValue: true
+      - key: SESSION_COOKIE_SECURE
+        value: "true"
+      - key: PORT
+        value: "10000"
+      - key: CORS_ORIGIN
+        value: "*"
+    disk:
+      name: falcon-data
+      mountPath: /opt/render/project/src/database
+      sizeGB: 1
