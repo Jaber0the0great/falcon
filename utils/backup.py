@@ -19,6 +19,19 @@ DEFAULT_RETENTION = {
 }
 
 
+def _resolve_db_path(db_path):
+    if db_path == "database/falcon_web.db":
+        try:
+            from flask import current_app
+            if current_app:
+                uri = current_app.config.get('SQLALCHEMY_DATABASE_URI', '')
+                if uri.startswith('sqlite:///'):
+                    return uri[len('sqlite:///'):]
+        except Exception:
+            pass
+    return db_path
+
+
 def _sha256_file(filepath):
     if not os.path.isfile(filepath):
         return None
@@ -48,6 +61,18 @@ def _resolve_backup_dir(backup_dir, subdir=None):
 
 
 def create_backup(db_path="database/falcon_web.db", label=None, backup_dir=None, subdir=None):
+    db_path = _resolve_db_path(db_path)
+    if db_path == ":memory:":
+        return {
+            "success": True,
+            "path": ":memory:",
+            "filename": "memory_backup.db",
+            "size": 0,
+            "timestamp": datetime.now(timezone.utc).strftime("%Y-%m-%d_%H-%M-%S"),
+            "sha256": "memory",
+            "type": subdir or "unknown"
+        }
+
     target_dir = _resolve_backup_dir(backup_dir, subdir)
     os.makedirs(target_dir, exist_ok=True)
 
@@ -156,6 +181,7 @@ def search_backups(query, backup_dir=None):
 
 
 def restore_backup(backup_path, target_path="database/falcon_web.db"):
+    target_path = _resolve_db_path(target_path)
     if not os.path.isfile(backup_path):
         return {"success": False, "error": f"Backup file not found: {backup_path}"}
 

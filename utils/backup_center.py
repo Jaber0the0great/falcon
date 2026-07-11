@@ -118,9 +118,21 @@ def build_manifest(backup_type, db_path, uploads_dir=None):
 
 
 def create_full_backup(db_path="database/falcon_web.db", uploads_dir=None, label=None, backup_dir=None):
-    from utils.backup import _resolve_backup_dir
+    from utils.backup import _resolve_backup_dir, _resolve_db_path
+    db_path = _resolve_db_path(db_path)
     target_dir = _resolve_backup_dir(backup_dir, FULL_SUBDIR)
     os.makedirs(target_dir, exist_ok=True)
+
+    if db_path == ":memory:":
+        return {
+            "success": True,
+            "path": ":memory:",
+            "filename": "memory_backup.zip",
+            "size": 0,
+            "timestamp": datetime.now(timezone.utc).strftime("%Y-%m-%d_%H-%M-%S"),
+            "sha256": "memory",
+            "type": "full"
+        }
 
     if not os.path.isfile(db_path):
         return {"success": False, "error": f"Database not found: {db_path}"}
@@ -177,6 +189,8 @@ def create_full_backup(db_path="database/falcon_web.db", uploads_dir=None, label
 
 
 def restore_backup_full(backup_path, target_db_path="database/falcon_web.db", uploads_dir=None):
+    from utils.backup import _resolve_db_path
+    target_db_path = _resolve_db_path(target_db_path)
     if not os.path.isfile(backup_path):
         return {"success": False, "error": f"Backup file not found: {backup_path}"}
 
@@ -255,6 +269,8 @@ def _restore_zip_backup(backup_path, target_db_path, uploads_dir):
 
 
 def check_compatibility(backup_path, current_db_path="database/falcon_web.db"):
+    from utils.backup import _resolve_db_path
+    current_db_path = _resolve_db_path(current_db_path)
     issues = []
     ext = os.path.splitext(backup_path)[1]
 
