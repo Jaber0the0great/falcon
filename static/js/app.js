@@ -27,9 +27,10 @@ function buildMessageHtml(packet) {
     
     if(packet.type === 'text') {
         contentHtml = escapeHtml(packet.content);
-    } else if(packet.type === 'file') {
-        const isImg = packet.name.match(/\.(jpeg|jpg|gif|png|bmp)$/i);
-        const isAudio = packet.name.match(/\.(webm|mp3|wav|ogg|m4a)$/i);
+    } else if(packet.type === 'file' || packet.type === 'voice') {
+        const filename = packet.name || (packet.content ? packet.content.split('/').pop() : '');
+        const isImg = filename.match(/\.(jpeg|jpg|gif|png|bmp)$/i);
+        const isAudio = (packet.type === 'voice') || (filename && filename.match(/\.(webm|mp3|wav|ogg|m4a)$/i));
         
         if(isImg) {
             contentHtml = `
@@ -45,10 +46,11 @@ function buildMessageHtml(packet) {
                 </div>
             </div>`;
         } else if (isAudio) {
+            const audioSrc = packet.content ? (packet.content.startsWith('/') ? packet.content : `/api/download/${filename}`) : `/api/download/${filename}`;
             contentHtml = `
             <div class="audio-container d-flex align-items-center gap-2" style="max-width: 100%;">
-                <audio controls src="/api/download/${packet.name}" style="height: 40px; outline: none;"></audio>
-                <a href="/api/download/${packet.name}" download="${packet.name}" class="btn btn-sm btn-success" title="Save Audio" style="border-radius: 50%; padding: 4px 8px;" aria-label="Save Audio Message">
+                <audio controls src="${audioSrc}" style="height: 40px; outline: none;"></audio>
+                <a href="${audioSrc}" download="${filename}" class="btn btn-sm btn-success" title="Save Audio" style="border-radius: 50%; padding: 4px 8px;" aria-label="Save Audio Message">
                     <i class="bi bi-download"></i>
                 </a>
             </div>`;
