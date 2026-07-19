@@ -1,0 +1,5 @@
+{
+  "server_url": "https://crucial-birds-addresses-officials.trycloudflare.com/",
+  "updated_at": "2026-07-19",
+  "note": "Update server_url here when the Cloudflare tunnel URL changes. The app reads this file on startup."
+}

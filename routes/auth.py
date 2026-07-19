@@ -99,6 +99,7 @@ def logout():
         user = User.query.get(session['user_id'])
         if user:
             user.status = "Offline"
+            user.fcm_token = None
             db.session.commit()
         session.clear()
     return success_response()

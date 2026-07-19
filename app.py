@@ -158,13 +158,16 @@ def create_app(config_class=Config):
             db.session.commit()
         except Exception:
             db.session.rollback()
-
+        try:
+            db.session.execute(db.text("ALTER TABLE user ADD COLUMN fcm_token VARCHAR(255)"))
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
         try:
             db.session.execute(db.text("ALTER TABLE message ADD COLUMN reactions TEXT DEFAULT '{}'"))
             db.session.commit()
         except Exception:
             db.session.rollback()
-
         try:
             db.session.execute(db.text("ALTER TABLE message ADD COLUMN reply_to VARCHAR(80)"))
             db.session.commit()

@@ -482,14 +482,85 @@ def register_events(socketio):
                     'conversation': target,
                     'type': 'group',
                 }, room=target, include_self=False)
-
         if target == 'All':
             emit('new_message', data, room='All')
         else:
             emit('new_message', data, room=target)
             if sender != target:
                 emit('new_message', data, room=sender)
-                
+
+        # FCM Wake Up Push Notification Dispatch
+        if ptype not in ('typing', 'ack', 'read', 'system', 'reaction', 'webrtc_signaling'):
+            try:
+                from utils.fcm import send_fcm_message
+                content = data.get('content', '')
+                notification_content = content
+                if not notification_content:
+                    notification_content = f"[{ptype.capitalize()} Message]"
+
+                if target == 'All':
+                    # Send fcm to all offline users except sender
+                    offline_users = User.query.filter(User.username != sender).all()
+                    for offline_user in offline_users:
+                        if offline_user.fcm_token and not registry.is_online(offline_user.username):
+                            send_fcm_message(
+                                token=offline_user.fcm_token,
+                                sender=sender,
+                                title=f"Broadcast from {sender}",
+                                content=notification_content,
+                                is_group=True,
+                                target_name="All",
+                                msg_id=data.get('msg_id'),
+                                msg_type=ptype,
+                                duration=data.get('duration'),
+                                file_name=data.get('file_name') or data.get('name'),
+                                reply_to=data.get('reply_to'),
+                                reply_content=data.get('reply_content')
+                            )
+                else:
+                    # Check if target is a group
+                    group = Group.query.filter_by(name=target).first()
+                    if group:
+                        members = GroupMember.query.filter_by(group_name=target).filter(GroupMember.username != sender).all()
+                        for member in members:
+                            if not registry.is_online(member.username):
+                                member_user = User.query.filter_by(username=member.username).first()
+                                if member_user and member_user.fcm_token:
+                                    send_fcm_message(
+                                        token=member_user.fcm_token,
+                                        sender=sender,
+                                        title=f"{target} ({sender})",
+                                        content=notification_content,
+                                        is_group=True,
+                                        target_name=target,
+                                        msg_id=data.get('msg_id'),
+                                        msg_type=ptype,
+                                        duration=data.get('duration'),
+                                        file_name=data.get('file_name') or data.get('name'),
+                                        reply_to=data.get('reply_to'),
+                                        reply_content=data.get('reply_content')
+                                    )
+                    else:
+                        # Private chat
+                        if not registry.is_online(target):
+                            recipient_user = User.query.filter_by(username=target).first()
+                            if recipient_user and recipient_user.fcm_token:
+                                send_fcm_message(
+                                    token=recipient_user.fcm_token,
+                                    sender=sender,
+                                    title=sender,
+                                    content=notification_content,
+                                    is_group=False,
+                                    target_name=sender,
+                                    msg_id=data.get('msg_id'),
+                                    msg_type=ptype,
+                                    duration=data.get('duration'),
+                                    file_name=data.get('file_name') or data.get('name'),
+                                    reply_to=data.get('reply_to'),
+                                    reply_content=data.get('reply_content')
+                                )
+            except Exception as e:
+                logger.error("FCM dispatch error in handle_message: %s", e)                
             if ptype not in ('typing', 'ack', 'read', 'system', 'reaction'):
                 ack_data = {"type": "ack", "sender": "Server", "to": sender, "msg_id": data.get('msg_id'), "status": data.get('status')}
                 emit('new_message', ack_data, room=sender)
@@ -511,6 +582,7 @@ def register_events(socketio):
             msg.status = 'read'
             db.session.commit()
             emit('message_status', {'msg_id': msg_id, 'status': 'read'}, room=msg.sender)
+            emit('message_status', {'msg_id': msg_id, 'status': 'read'}, room=msg.recipient)
 
     @socketio.on('mark_all_read')
     def handle_mark_all_read(data):
@@ -536,6 +608,7 @@ def register_events(socketio):
             
             for m in unread_messages:
                 emit('message_status', {'msg_id': m.msg_id, 'status': 'read'}, room=sender_username)
+                emit('message_status', {'msg_id': m.msg_id, 'status': 'read'}, room=my_username)
 
     @socketio.on('reaction')
     def handle_reaction(data):

@@ -13,6 +13,7 @@ class User(db.Model):
     is_admin = db.Column(db.Boolean, default=False, nullable=False)
     theme = db.Column(db.String(20), default='system')
     default_status = db.Column(db.String(20), default='Available')
+    fcm_token = db.Column(db.String(255), nullable=True)
 
     def set_password(self, password):
         self.password_hash = generate_password_hash(password)

@@ -270,6 +270,24 @@ def get_user_info():
     if 'user_id' not in session:
         return error_response(ErrorCode.AUTH_NOT_AUTHENTICATED[0], "Not authenticated", status_code=401)
     return success_response({"username": session['username']})
+@api_bp.route('/users/fcm_token', methods=['POST'])
+@rate_limit(USER_INFO_LIMIT, key_func=user_key)
+def save_fcm_token():
+    if 'user_id' not in session:
+        return error_response(ErrorCode.AUTH_NOT_AUTHENTICATED[0], "Not authenticated", status_code=401)
+    
+    data = request.get_json()
+    if not data or 'token' not in data:
+        return error_response(ErrorCode.PARAM_MISSING[0], "Token is required", status_code=400)
+        
+    token = data.get('token')
+    user = User.query.get(session['user_id'])
+    if not user:
+        return error_response(ErrorCode.USER_NOT_FOUND[0], "User not found", status_code=404)
+        
+    user.fcm_token = token if token else None
+    db.session.commit()
+    return success_response()
 
 @api_bp.route('/webrtc_config', methods=['GET'])
 @rate_limit(WEBRTC_CONFIG_LIMIT, key_func=ip_key)
