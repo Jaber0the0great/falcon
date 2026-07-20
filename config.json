@@ -1,5 +1,5 @@
-{
-  "server_url": "https://crucial-birds-addresses-officials.trycloudflare.com/",
-  "updated_at": "2026-07-19",
-  "note": "Update server_url here when the Cloudflare tunnel URL changes. The app reads this file on startup."
+﻿{
+    "server_url":  "https://surrounded-acceptable-investor-connector.trycloudflare.com/",
+    "updated_at":  "2026-07-21",
+    "note":  "Update server_url here when the Cloudflare tunnel URL changes. The app reads this file on startup."
 }
