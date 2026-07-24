@@ -225,6 +225,13 @@ def delete_user(user_id):
             db.session.delete(g)
             
         db.session.commit()
+        try:
+            from app_socket import socketio
+            if socketio:
+                socketio.emit('user_deleted', {"username": username}, room='All')
+        except Exception as se:
+            logger.error("Error emitting user_deleted socket event: %s", se)
+
         return success_response({"message": f"User '{username}' and all their data/messages deleted successfully."})
     except Exception as e:
         db.session.rollback()

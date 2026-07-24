@@ -82,10 +82,16 @@ def register():
         logger.info("Registration failed: username '%s' already exists or conflicts with group name.", username)
         return error_response(ErrorCode.AUTH_USERNAME_EXISTS[0], "Registration failed", status_code=400)
 
-    user = User(username=username)
+    user = User(username=username, is_admin=False)
     user.set_password(password)
     db.session.add(user)
     db.session.commit()
+
+    try:
+        from sockets.events import broadcast_user_list
+        broadcast_user_list()
+    except Exception as e:
+        logger.error("Failed to broadcast user list after registration: %s", e)
 
     session.clear()
     session['user_id'] = user.id

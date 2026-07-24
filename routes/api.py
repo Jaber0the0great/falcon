@@ -518,7 +518,6 @@ def get_call_history():
             "time": c.time,
             "created_at": c.created_at.isoformat() + "Z" if c.created_at else None
         })
-        
     return success_response({"calls": result})
 
 @api_bp.route('/groups/invite', methods=['POST'])
@@ -1022,8 +1021,9 @@ def get_users_list():
     if 'user_id' not in session:
         return error_response(ErrorCode.AUTH_NOT_AUTHENTICATED[0], "Not authenticated", status_code=401)
         
+    from sqlalchemy import or_
     my_name = session['username']
-    all_users = User.query.filter(User.is_admin != True, User.username != my_name).order_by(User.username.asc()).all()
+    all_users = User.query.filter(or_(User.is_admin == False, User.is_admin == None), User.username != my_name).all()
     
     result = []
     for u in all_users:
@@ -1033,14 +1033,119 @@ def get_users_list():
             Message.status != 'read'
         ).count()
         
+        last_msg = Message.query.filter(
+            ((Message.sender == my_name) & (Message.recipient == u.username)) |
+            ((Message.sender == u.username) & (Message.recipient == my_name))
+        ).order_by(Message.id.desc()).first()
+
+        last_msg_iso = None
+        sort_time = 0.0
+        if last_msg:
+            if hasattr(last_msg, 'created_at') and last_msg.created_at:
+                last_msg_iso = last_msg.created_at.isoformat() + "Z"
+                try:
+                    sort_time = last_msg.created_at.timestamp()
+                except Exception:
+                    sort_time = 0.0
+
         result.append({
             "name": u.username,
             "status": u.status,
             "last_seen": (u.last_seen.isoformat() + "Z") if u.last_seen else None,
-            "unread_count": unread_count
+            "unread_count": unread_count,
+            "last_message_time": last_msg_iso,
+            "_sort_time": sort_time
         })
         
+    result.sort(key=lambda x: (x["_sort_time"], x["unread_count"]), reverse=True)
+    
+    for r in result:
+        r.pop("_sort_time", None)
+        
     return success_response({"users": result})
+
+@api_bp.route('/log_android_error', methods=['POST'])
+def log_android_error():
+    try:
+        data = request.get_json() or {}
+        username = data.get('username', 'Anonymous')
+        action = data.get('action', 'Unknown action')
+        error = data.get('error', 'No error message')
+        details = data.get('details', '')
+        client_time = data.get('timestamp', datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"))
+        
+        log_dir = os.path.join(current_app.root_path, 'logs')
+        if not os.path.exists(log_dir):
+            os.makedirs(log_dir, exist_ok=True)
+            
+        log_file = os.path.join(log_dir, 'android_errors.log')
+        log_entry = f"[{client_time}] [User: {username}] [Action: {action}] ERROR: {error} | Details: {details}\n"
+        
+        with open(log_file, 'a', encoding='utf-8') as f:
+            f.write(log_entry)
+            
+        logger.error(f"[AndroidClientError] User: {username} | Action: {action} | Error: {error}")
+        return success_response({"message": "Error logged successfully"})
+    except Exception as e:
+        logger.error("Failed to write android error log: %s", e)
+        return error_response(500, f"Failed to log error: {str(e)}", status_code=500)
+
+@api_bp.route('/update_profile', methods=['POST'])
+@rate_limit(USER_INFO_LIMIT, key_func=user_key)
+def update_profile():
+    if 'user_id' not in session:
+        return error_response(ErrorCode.AUTH_NOT_AUTHENTICATED[0], "Not authenticated", status_code=401)
+
+    user = User.query.get(session['user_id'])
+    if not user:
+        return error_response(ErrorCode.AUTH_NOT_AUTHENTICATED[0], "User not found", status_code=404)
+
+    data = request.get_json() or {}
+    new_username = (data.get('new_username') or '').strip()
+    new_password = (data.get('new_password') or data.get('new_pwd') or '').strip()
+
+    if not new_username and not new_password:
+        return error_response(ErrorCode.VALIDATION_INVALID_INPUT[0], "No changes provided", status_code=400)
+
+    if new_username and new_username.lower() != user.username.lower():
+        if len(new_username) < 3 or len(new_username) > 30:
+            return error_response(ErrorCode.VALIDATION_INVALID_INPUT[0], "Username must be between 3 and 30 characters", status_code=400)
+            
+        existing = User.query.filter(User.username.ilike(new_username), User.id != user.id).first()
+        if existing:
+            return error_response(ErrorCode.AUTH_USER_ALREADY_EXISTS[0], "Username already taken. Please choose a different name.", status_code=409)
+
+        old_username = user.username
+        user.username = new_username
+
+        try:
+            Message.query.filter_by(sender=old_username).update({Message.sender: new_username}, synchronize_session=False)
+            Message.query.filter_by(recipient=old_username).update({Message.recipient: new_username}, synchronize_session=False)
+            GroupMember.query.filter_by(username=old_username).update({GroupMember.username: new_username}, synchronize_session=False)
+            GroupInvite.query.filter_by(username=old_username).update({GroupInvite.username: new_username}, synchronize_session=False)
+            GroupInvite.query.filter_by(invited_by=old_username).update({GroupInvite.invited_by: new_username}, synchronize_session=False)
+            GroupJoinRequest.query.filter_by(username=old_username).update({GroupJoinRequest.username: new_username}, synchronize_session=False)
+            Group.query.filter_by(owner_username=old_username).update({Group.owner_username: new_username}, synchronize_session=False)
+        except Exception as e:
+            logger.error("Error cascading username update: %s", e)
+
+        session['username'] = new_username
+        
+        try:
+            from app_socket import socketio
+            if socketio:
+                socketio.emit('user_update', {"type": "rename", "old_username": old_username, "new_username": new_username}, room='All')
+        except Exception as se:
+            logger.error("Error emitting user_update socket event: %s", se)
+
+    if new_password:
+        if len(new_password) < 6:
+            return error_response(ErrorCode.VALIDATION_INVALID_INPUT[0], "Password must be at least 6 characters long.", status_code=400)
+        user.set_password(new_password)
+
+    db.session.commit()
+    return success_response({"message": "Profile updated successfully", "username": user.username})
+
 
 
 

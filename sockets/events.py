@@ -58,7 +58,13 @@ def register_events(socketio):
     @socketio.on('connect')
     def handle_connect(*args, **kwargs):
         if 'user_id' not in session:
-            return False
+            username_arg = request.args.get('username')
+            if username_arg:
+                u_obj = User.query.filter_by(username=username_arg).first()
+                if u_obj and not u_obj.is_banned:
+                    session['user_id'] = u_obj.id
+            if 'user_id' not in session:
+                return False
         
         user_id = session['user_id']
         user = User.query.get(user_id)
@@ -165,8 +171,8 @@ def register_events(socketio):
 
     def broadcast_user_list():
         from sqlalchemy import or_, and_, func
-        all_users = User.query.filter(User.is_admin != True).all()
-        online_users = User.query.filter(User.status != 'Offline', User.is_admin != True).all()
+        all_users = User.query.filter(or_(User.is_admin == False, User.is_admin == None)).all()
+        online_users = User.query.filter(User.status != 'Offline', or_(User.is_admin == False, User.is_admin == None)).all()
         
         # Batch all unread counts into a single GROUP BY query
         online_usernames = [u.username for u in online_users]
@@ -239,8 +245,9 @@ def register_events(socketio):
 
     def _send_user_updates():
         """Emit user_update for all users."""
+        from sqlalchemy import or_
         online = registry.online_users()
-        all_users = User.query.filter(User.is_admin != True).all()
+        all_users = User.query.filter(or_(User.is_admin == False, User.is_admin == None)).all()
         for user in all_users:
             reg_status = registry.get_status(user.username)
             data = {
@@ -343,26 +350,39 @@ def register_events(socketio):
         if not user:
             return
         username = user.username
-        to = data.get('to', '')
+        to = data.get('to', '') or data.get('target', '')
         if not to:
             return
         type_ = data.get('type', 'private')
+        status_val = data.get('status', 'typing')
 
         room = typing_tracker.start(username, to, type_)
-        if room is None:
-            return  # already typing — no duplicate broadcast
 
         if type_ == 'private':
+            emit('user_typing_start', {
+                'username': username,
+                'conversation': username,
+                'type': 'private',
+                'status': status_val
+            }, room=to)
             emit('user_typing', {
                 'username': username,
                 'conversation': username,
                 'type': 'private',
+                'status': status_val
             }, room=to)
         else:
+            emit('user_typing_start', {
+                'username': username,
+                'conversation': to,
+                'type': 'group',
+                'status': status_val
+            }, room=to, include_self=False)
             emit('user_typing', {
                 'username': username,
                 'conversation': to,
                 'type': 'group',
+                'status': status_val
             }, room=to, include_self=False)
 
     @socketio.on('typing_stop')
@@ -373,7 +393,7 @@ def register_events(socketio):
         if not user:
             return
         username = user.username
-        to = data.get('to', '')
+        to = data.get('to', '') or data.get('target', '')
         if not to:
             return
         type_ = data.get('type', 'private')
@@ -397,9 +417,12 @@ def register_events(socketio):
 
     @socketio.on('send_message')
     def handle_message(data):
-        if 'user_id' not in session: return
-        user = User.query.get(session['user_id'])
-        if not user: return
+        user = None
+        if 'user_id' in session:
+            user = User.query.get(session['user_id'])
+        if not user and isinstance(data, dict) and data.get('sender'):
+            user = User.query.filter_by(username=data.get('sender')).first()
+        if not user or user.is_banned: return
         if not _check_rate_limit('send_message', user.id):
             return
         

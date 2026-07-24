@@ -29,14 +29,14 @@ class WebRTCManager {
                 console.log("Loaded WebRTC ICE configuration:", this.config);
             }
         } catch(e) {
-            console.error("Failed to load WebRTC config, using fallback STUN:", e);
+            console.error("Failed to load WebRTC config, using fallback STUN/TURN:", e);
             this.config = {
                 'iceServers': [
                     { 'urls': 'stun:stun.l.google.com:19302' },
                     { 'urls': 'stun:stun1.l.google.com:19302' },
-                    { 'urls': 'stun:stun2.l.google.com:19302' },
-                    { 'urls': 'stun:stun3.l.google.com:19302' },
-                    { 'urls': 'stun:stun4.l.google.com:19302' }
+                    { 'urls': 'turn:openrelay.metered.ca:80', 'username': 'openrelayproject', 'credential': 'openrelayproject' },
+                    { 'urls': 'turn:openrelay.metered.ca:443', 'username': 'openrelayproject', 'credential': 'openrelayproject' },
+                    { 'urls': 'turns:openrelay.metered.ca:443?transport=tcp', 'username': 'openrelayproject', 'credential': 'openrelayproject' }
                 ]
             };
         }
@@ -215,6 +215,32 @@ class WebRTCManager {
     
     // --- CORE LOGIC ---
     
+    async getAudioStream() {
+        if (this.localStream) {
+            try {
+                this.localStream.getTracks().forEach(t => t.stop());
+            } catch(e) {}
+            this.localStream = null;
+        }
+        if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+            try {
+                return await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+            } catch(e1) {
+                return await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } });
+            }
+        } else if (navigator.getUserMedia) {
+            return new Promise((resolve, reject) => {
+                navigator.getUserMedia({ audio: true, video: false }, resolve, reject);
+            });
+        } else if (navigator.webkitGetUserMedia) {
+            return new Promise((resolve, reject) => {
+                navigator.webkitGetUserMedia({ audio: true, video: false }, resolve, reject);
+            });
+        } else {
+            throw new Error("Browser does not support getUserMedia over insecure HTTP connection");
+        }
+    }
+
     async startCall(target) {
         if(this.isInCall()) {
             alert("You are already in an active call!");
@@ -235,7 +261,7 @@ class WebRTCManager {
         }
         
         try {
-            this.localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+            this.localStream = await this.getAudioStream();
             this.setupPeerConnection(target);
             
             const offer = await this.peerConnection.createOffer();
@@ -245,14 +271,16 @@ class WebRTCManager {
                 to: target,
                 from: myUsername,
                 type: 'offer',
-                offer: offer
+                offer: offer,
+                sdp: offer.sdp
             });
             
             this.isLocked = false;
         } catch(err) {
             console.error("WebRTC Error:", err);
             this.cleanup();
-            this.showErrorUI("Error: Please grant microphone access");
+            const msg = err.name === 'NotAllowedError' ? 'Error: Please grant microphone access' : `Error: ${err.message || 'Call failed'}`;
+            this.showErrorUI(msg);
         }
     }
     
@@ -269,7 +297,9 @@ class WebRTCManager {
             }
             this.callTarget = data.from;
             this.isCaller = false;
-            this.incomingOffer = data.offer;
+            const sdpContent = data.sdp || (data.offer ? data.offer.sdp : '');
+            this.incomingOffer = data.offer || { type: 'offer', sdp: sdpContent };
+            this.incomingSdp = sdpContent;
             this.iceQueue = [];
             
             // Switch view to caller's chat to ensure they see the call screen
@@ -285,15 +315,24 @@ class WebRTCManager {
 
         } else if(data.type === 'answer') {
             if(this.peerConnection) {
-                this.peerConnection.setRemoteDescription(data.answer)
+                const sdpContent = data.sdp || (data.answer ? data.answer.sdp : '');
+                const answerDesc = new RTCSessionDescription({ type: 'answer', sdp: sdpContent });
+                this.peerConnection.setRemoteDescription(answerDesc)
                 .then(() => {
                     this.showInCallUI(this.callTarget);
                     this.processIceQueue();
                 }).catch(e => console.error("WebRTC Answer Error:", e));
             }
             
-        } else if(data.type === 'ice_candidate') {
-            this.iceQueue.push(data.candidate);
+        } else if(data.type === 'ice_candidate' || data.type === 'candidate') {
+            const cand = data.candidate;
+            if(cand) {
+                if (typeof cand === 'string') {
+                    this.iceQueue.push({ candidate: cand, sdpMid: data.sdpMid || '0', sdpMLineIndex: data.sdpMLineIndex || 0 });
+                } else {
+                    this.iceQueue.push(cand);
+                }
+            }
             this.processIceQueue();
             
         } else if(data.type === 'reject') {
@@ -358,10 +397,15 @@ class WebRTCManager {
         });
         
         try {
-            this.localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+            this.localStream = await this.getAudioStream();
             this.setupPeerConnection(target);
             
-            await this.peerConnection.setRemoteDescription(this.incomingOffer);
+            const offerSdpText = typeof this.incomingOffer === 'string' ? this.incomingOffer : (this.incomingOffer && this.incomingOffer.sdp ? this.incomingOffer.sdp : (this.incomingSdp || ''));
+            if (!offerSdpText) {
+                throw new Error("Missing SDP offer string from remote peer");
+            }
+            const offerDesc = new RTCSessionDescription({ type: 'offer', sdp: offerSdpText });
+            await this.peerConnection.setRemoteDescription(offerDesc);
             
             const answer = await this.peerConnection.createAnswer();
             await this.peerConnection.setLocalDescription(answer);
@@ -370,7 +414,8 @@ class WebRTCManager {
                 to: target,
                 from: myUsername,
                 type: 'answer',
-                answer: answer
+                answer: answer,
+                sdp: answer.sdp
             });
             
             this.showInCallUI(target);
@@ -379,7 +424,8 @@ class WebRTCManager {
         } catch(err) {
             console.error("WebRTC Accept Error:", err);
             this.cleanup();
-            this.showErrorUI("Error: Cannot access microphone");
+            const msg = err.name === 'NotAllowedError' ? 'Error: Cannot access microphone' : `Error: ${err.message || 'Call accept failed'}`;
+            this.showErrorUI(msg);
             if(target) {
                 socket.emit('webrtc_signaling', { type: 'reject', to: target });
             }
@@ -454,7 +500,10 @@ class WebRTCManager {
                     to: target,
                     from: myUsername,
                     type: 'ice_candidate',
-                    candidate: event.candidate
+                    candidate: event.candidate,
+                    sdp: event.candidate.candidate,
+                    sdpMid: event.candidate.sdpMid,
+                    sdpMLineIndex: event.candidate.sdpMLineIndex
                 });
             }
         };
