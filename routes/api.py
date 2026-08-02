@@ -4,7 +4,7 @@ import base64
 import logging
 import unicodedata
 from flask import Blueprint, request, jsonify, session, current_app, send_from_directory
-from models.models import Message, User, Group, GroupMember, GroupInvite, GroupJoinRequest
+from models.models import Message, User, Group, GroupMember, GroupInvite, GroupJoinRequest, BlockedUser
 from database.database import db
 from utils.crypto import decrypt_text
 from utils.api import success_response, error_response, ErrorCode
@@ -1145,6 +1145,103 @@ def update_profile():
 
     db.session.commit()
     return success_response({"message": "Profile updated successfully", "username": user.username})
+
+@api_bp.route('/block', methods=['POST'])
+def block_user():
+    if 'user_id' not in session:
+        return error_response(ErrorCode.AUTH_NOT_AUTHENTICATED[0], "Not authenticated", status_code=401)
+
+    my_username = session['username']
+    data = request.get_json(silent=True) or {}
+    target_username = data.get('target', '').strip()
+
+    if not target_username or target_username.lower() == my_username.lower():
+        return error_response(ErrorCode.VALIDATION_INVALID_TARGET[0], "Invalid target user", status_code=400)
+
+    target_user = User.query.filter_by(username=target_username).first()
+    if not target_user:
+        return error_response(ErrorCode.USER_NOT_FOUND[0], "User not found", status_code=404)
+
+    existing = BlockedUser.query.filter_by(blocker_username=my_username, blocked_username=target_user.username).first()
+    if not existing:
+        blocked_entry = BlockedUser(blocker_username=my_username, blocked_username=target_user.username)
+        db.session.add(blocked_entry)
+        db.session.commit()
+
+    return success_response({"message": "User blocked successfully", "target": target_user.username})
+
+@api_bp.route('/unblock', methods=['POST'])
+def unblock_user():
+    if 'user_id' not in session:
+        return error_response(ErrorCode.AUTH_NOT_AUTHENTICATED[0], "Not authenticated", status_code=401)
+
+    my_username = session['username']
+    data = request.get_json(silent=True) or {}
+    target_username = data.get('target', '').strip()
+
+    if not target_username:
+        return error_response(ErrorCode.VALIDATION_INVALID_TARGET[0], "Invalid target user", status_code=400)
+
+    BlockedUser.query.filter_by(blocker_username=my_username, blocked_username=target_username).delete()
+    db.session.commit()
+
+    return success_response({"message": "User unblocked successfully", "target": target_username})
+
+@api_bp.route('/blocked_users', methods=['GET'])
+def get_blocked_users():
+    if 'user_id' not in session:
+        return error_response(ErrorCode.AUTH_NOT_AUTHENTICATED[0], "Not authenticated", status_code=401)
+
+    my_username = session['username']
+    blocked_entries = BlockedUser.query.filter_by(blocker_username=my_username).all()
+    blocked_by_entries = BlockedUser.query.filter_by(blocked_username=my_username).all()
+
+    return success_response({
+        "blocked_by_me": [b.blocked_username for b in blocked_entries],
+        "blocked_me": [b.blocker_username for b in blocked_by_entries]
+    })
+
+@api_bp.route('/clear_chat', methods=['POST'])
+def clear_chat():
+    if 'user_id' not in session:
+        return error_response(ErrorCode.AUTH_NOT_AUTHENTICATED[0], "Not authenticated", status_code=401)
+
+    my_username = session['username']
+    data = request.get_json(silent=True) or {}
+    target = data.get('target', '').strip()
+
+    if not target:
+        return error_response(ErrorCode.VALIDATION_INVALID_TARGET[0], "Invalid target", status_code=400)
+
+    from models.models import Message, MessageVisibility
+    from sqlalchemy import or_, and_
+
+    group = Group.query.filter_by(name=target).first()
+    if group:
+        messages = Message.query.filter_by(recipient=target).all()
+    else:
+        messages = Message.query.filter(
+            or_(
+                and_(Message.sender == my_username, Message.recipient == target),
+                and_(Message.sender == target, Message.recipient == my_username)
+            )
+        ).all()
+
+    for msg in messages:
+        existing = MessageVisibility.query.filter_by(msg_id=msg.msg_id, username=my_username).first()
+        if not existing:
+            vis = MessageVisibility(msg_id=msg.msg_id, username=my_username)
+            db.session.add(vis)
+
+    try:
+        db.session.commit()
+    except Exception as e:
+        db.session.rollback()
+        logger.error("Error clearing chat history on server: %s", e)
+
+    return success_response({"message": "Chat history cleared successfully", "target": target})
+
+
 
 
 

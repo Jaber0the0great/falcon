@@ -93,3 +93,16 @@ class MessageVisibility(db.Model):
     )
 
 
+class BlockedUser(db.Model):
+    __tablename__ = 'blocked_user'
+    id = db.Column(db.Integer, primary_key=True)
+    blocker_username = db.Column(db.String(80), nullable=False, index=True)
+    blocked_username = db.Column(db.String(80), nullable=False, index=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    __table_args__ = (
+        db.UniqueConstraint('blocker_username', 'blocked_username', name='uq_blocker_blocked'),
+    )
+
+
+

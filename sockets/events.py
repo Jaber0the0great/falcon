@@ -434,6 +434,22 @@ def register_events(socketio):
         
         if not _can_send_to_target(target, sender):
             return
+
+        if target != 'All':
+            from models.models import BlockedUser
+            is_blocked_by_target = BlockedUser.query.filter_by(blocker_username=target, blocked_username=sender).first() is not None
+            is_blocked_by_sender = BlockedUser.query.filter_by(blocker_username=sender, blocked_username=target).first() is not None
+            if is_blocked_by_target or is_blocked_by_sender:
+                error_ack = {
+                    "type": "ack",
+                    "sender": "Server",
+                    "to": sender,
+                    "msg_id": data.get('msg_id'),
+                    "status": "failed",
+                    "error": "blocked"
+                }
+                emit('new_message', error_ack, room=sender)
+                return
         
         # Reject oversized messages before any processing
         content = data.get('content', '') or ''
@@ -749,6 +765,44 @@ def register_events(socketio):
             
             # Emit deletion to the deleting user only
             emit('message_deleted', {'msg_id': msg_id, 'to': username}, room=username)
+
+    @socketio.on('clear_chat')
+    def handle_clear_chat(data):
+        if 'user_id' not in session: return
+        user = User.query.get(session['user_id'])
+        if not user: return
+        if not _check_rate_limit('delete_message', user.id):
+            return
+
+        username = user.username
+        target = data.get('target', '').strip()
+        if not target: return
+
+        from models.models import MessageVisibility
+        from sqlalchemy import or_, and_
+
+        group = Group.query.filter_by(name=target).first()
+        if group:
+            messages = Message.query.filter_by(recipient=target).all()
+        else:
+            messages = Message.query.filter(
+                or_(
+                    and_(Message.sender == username, Message.recipient == target),
+                    and_(Message.sender == target, Message.recipient == username)
+                )
+            ).all()
+
+        for msg in messages:
+            exists = MessageVisibility.query.filter_by(msg_id=msg.msg_id, username=username).first()
+            if not exists:
+                vis = MessageVisibility(msg_id=msg.msg_id, username=username)
+                db.session.add(vis)
+
+        try:
+            db.session.commit()
+        except Exception as e:
+            db.session.rollback()
+            logger.error("Error clearing chat via socket: %s", e)
 
     @socketio.on('webrtc_signaling')
     def handle_webrtc(data):
