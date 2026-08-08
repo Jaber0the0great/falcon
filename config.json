@@ -1,5 +1,5 @@
 ﻿{
-    "server_url":  "https://transformation-syndicate-reports-goes.trycloudflare.com/",
-    "updated_at":  "2026-08-07",
+    "server_url":  "https://atm-planner-prepaid-api.trycloudflare.com",
+    "updated_at":  "2026-08-08",
     "note":  "Update server_url here when the Cloudflare tunnel URL changes."
 }
