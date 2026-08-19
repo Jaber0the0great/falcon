@@ -1,5 +1,5 @@
 {
-    "server_url": "http://falconchat.duckdns.org:10333/",
+    "server_url": "https://falconchat.duckdns.org:10333/",
     "updated_at": "2026-08-19",
     "note": "Update server_url here when the server URL changes. The app reads this file on startup."
 }
