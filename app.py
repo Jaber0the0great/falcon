@@ -276,7 +276,8 @@ def create_app(config_class=Config):
             while True:
                 eventlet.sleep(PRESENCE_CHECK_INTERVAL_SECONDS)
                 try:
-                    check_away_users()
+                    with app.app_context():
+                        check_away_users()
                 except Exception as e:
                     logger.exception("Presence check failed: %s", e)
         eventlet.spawn(_run_presence_check)
