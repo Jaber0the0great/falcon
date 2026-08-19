@@ -1,4 +1,5 @@
 """Runtime typing state — in-memory, no database writes."""
+from __future__ import annotations
 
 import threading
 from typing import Optional

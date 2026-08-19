@@ -1,4 +1,5 @@
 """Runtime presence registry — in-memory, no database writes for presence metadata."""
+from __future__ import annotations
 
 import threading
 from dataclasses import dataclass, field
