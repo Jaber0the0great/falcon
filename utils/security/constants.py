@@ -108,13 +108,13 @@ MAX_UPLOAD_SIZE: int = 50 * 1024 * 1024  # 50 MB
 #   Archives  .zip .rar .7z .tar .gz
 #   Other     .json .xml .yaml .yml .log
 ALLOWED_EXTENSIONS: frozenset = frozenset({
-    '.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp', '.svg', '.ico',
+    '.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp', '.svg', '.ico', '.heic', '.heif',
     '.mp3', '.wav', '.ogg', '.flac', '.aac', '.m4a', '.wma',
-    '.mp4', '.avi', '.mkv', '.mov', '.wmv', '.flv', '.webm',
+    '.mp4', '.avi', '.mkv', '.mov', '.wmv', '.flv', '.webm', '.3gp',
     '.pdf', '.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx',
-    '.txt', '.rtf', '.csv', '.md',
-    '.zip', '.rar', '.7z', '.tar', '.gz',
-    '.json', '.xml', '.yaml', '.yml', '.log',
+    '.txt', '.rtf', '.csv', '.md', '.odt', '.ods', '.odp', '.pages', '.numbers', '.key',
+    '.zip', '.rar', '.7z', '.tar', '.gz', '.bz2', '.xz',
+    '.json', '.xml', '.yaml', '.yml', '.log', '.apk', '.epub',
 })
 
 # Characters that are never valid in a filename.  Each character

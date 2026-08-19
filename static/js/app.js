@@ -41,48 +41,85 @@ function buildMessageHtml(packet) {
     if(packet.type === 'text') {
         contentHtml = escapeHtml(packet.content);
     } else if(packet.type === 'file' || packet.type === 'voice') {
-        const filename = packet.name || (packet.content ? packet.content.split('/').pop() : '');
-        const isImg = filename.match(/\.(jpeg|jpg|gif|png|bmp)$/i);
-        const isAudio = (packet.type === 'voice') || (filename && filename.match(/\.(webm|mp3|wav|ogg|m4a)$/i));
+        // Resolve actual disk filename (supports Android /static/uploads/... or Web <uuid>_<name>)
+        let serverFileName = '';
+        if (packet.content && typeof packet.content === 'string' && packet.content.includes('/')) {
+            serverFileName = packet.content.split('/').pop();
+        } else if (packet.name) {
+            serverFileName = packet.name;
+        } else if (packet.content) {
+            serverFileName = packet.content;
+        }
+
+        // Clean user display name
+        let displayName = packet.file_name || packet.name || serverFileName;
+        if (displayName.match(/^[a-fA-F0-9]{32}_|^[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}_/)) {
+            displayName = displayName.replace(/^[a-fA-F0-9]{32}_|^[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}_/, '');
+        }
+
+        const isImg = serverFileName.match(/\.(jpeg|jpg|gif|png|bmp|webp|heic|heif)$/i);
+        const isAudio = (packet.type === 'voice') || (serverFileName && serverFileName.match(/\.(webm|mp3|wav|ogg|m4a|aac|flac)$/i));
+        const isVideo = serverFileName.match(/\.(mp4|avi|mkv|mov|wmv|flv|webm|3gp)$/i);
+        const fileUrl = `/api/download/${encodeURIComponent(serverFileName)}`;
         
         if(isImg) {
             contentHtml = `
             <div style="position: relative; display: inline-block; max-width: 100%;">
-                <img src="/api/download/${packet.name}" style="max-width:100%; border-radius:8px; margin-bottom: 5px;" alt="Attached Image" loading="lazy">
+                <img src="${fileUrl}" style="max-width:100%; max-height: 350px; border-radius:8px; margin-bottom: 5px; object-fit: contain;" alt="${escapeHtml(displayName)}" loading="lazy">
                 <div style="display: flex; gap: 5px; margin-top: 5px;">
-                    <a href="/api/download/${packet.name}" target="_blank" class="btn btn-sm btn-outline-info" style="font-size: 0.8rem; padding: 2px 6px;">
+                    <a href="${fileUrl}" target="_blank" class="btn btn-sm btn-outline-info" style="font-size: 0.8rem; padding: 2px 6px;">
                         <i class="bi bi-eye"></i> View
                     </a>
-                    <a href="/api/download/${packet.name}" download="${packet.name}" class="btn btn-sm btn-outline-success" style="font-size: 0.8rem; padding: 2px 6px;">
+                    <a href="${fileUrl}" download="${escapeHtml(displayName)}" class="btn btn-sm btn-outline-success" style="font-size: 0.8rem; padding: 2px 6px;">
                         <i class="bi bi-download"></i> Save
                     </a>
                 </div>
             </div>`;
         } else if (isAudio) {
-            const audioSrc = packet.content ? (packet.content.startsWith('/') ? packet.content : `/api/download/${filename}`) : `/api/download/${filename}`;
             contentHtml = `
             <div class="audio-container d-flex align-items-center gap-2" style="max-width: 100%;">
-                <audio controls src="${audioSrc}" style="height: 40px; outline: none;"></audio>
-                <a href="${audioSrc}" download="${filename}" class="btn btn-sm btn-success" title="Save Audio" style="border-radius: 50%; padding: 4px 8px;" aria-label="Save Audio Message">
+                <audio controls src="${fileUrl}" style="height: 40px; outline: none;"></audio>
+                <a href="${fileUrl}" download="${escapeHtml(displayName)}" class="btn btn-sm btn-success" title="Save Audio" style="border-radius: 50%; padding: 4px 8px;" aria-label="Save Audio Message">
                     <i class="bi bi-download"></i>
                 </a>
             </div>`;
-        } else {
-            const displayName = packet.name.substring(packet.name.indexOf('_') + 1);
+        } else if (isVideo) {
             contentHtml = `
-            <div style="display:flex; align-items:center; justify-content: space-between; gap: 15px; background: rgba(0,0,0,0.2); padding: 10px; border-radius: 8px;">
+            <div style="position: relative; display: inline-block; max-width: 100%;">
+                <video controls src="${fileUrl}" style="max-width:100%; max-height: 350px; border-radius:8px; margin-bottom: 5px;"></video>
+                <div style="display: flex; gap: 5px; margin-top: 5px;">
+                    <a href="${fileUrl}" target="_blank" class="btn btn-sm btn-outline-info" style="font-size: 0.8rem; padding: 2px 6px;">
+                        <i class="bi bi-eye"></i> View
+                    </a>
+                    <a href="${fileUrl}" download="${escapeHtml(displayName)}" class="btn btn-sm btn-outline-success" style="font-size: 0.8rem; padding: 2px 6px;">
+                        <i class="bi bi-download"></i> Save
+                    </a>
+                </div>
+            </div>`;
+        } else {
+            let docIcon = '📄';
+            const lowerName = serverFileName.toLowerCase();
+            if (lowerName.endsWith('.pdf')) docIcon = '📕';
+            else if (lowerName.match(/\.(doc|docx|odt|pages|txt|rtf|md)$/)) docIcon = '📘';
+            else if (lowerName.match(/\.(xls|xlsx|ods|numbers|csv)$/)) docIcon = '📊';
+            else if (lowerName.match(/\.(ppt|pptx|odp|key)$/)) docIcon = '📙';
+            else if (lowerName.match(/\.(zip|rar|7z|tar|gz|bz2|xz)$/)) docIcon = '📦';
+            else if (lowerName.endsWith('.apk')) docIcon = '🤖';
+
+            contentHtml = `
+            <div style="display:flex; align-items:center; justify-content: space-between; gap: 15px; background: rgba(0,0,0,0.25); padding: 10px 14px; border-radius: 8px; min-width: 200px;">
                 <div style="display:flex; align-items:center; gap: 10px; overflow: hidden;">
-                    <div style="font-size: 1.5rem; flex-shrink: 0;">📄</div>
+                    <div style="font-size: 1.6rem; flex-shrink: 0;">${docIcon}</div>
                     <div style="overflow: hidden;">
-                        <div style="color: #f8fafc; font-weight: 500; text-overflow: ellipsis; white-space: nowrap; overflow: hidden;" title="${escapeHtml(displayName)}">${escapeHtml(displayName)}</div>
+                        <div style="color: #f8fafc; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; overflow: hidden;" title="${escapeHtml(displayName)}">${escapeHtml(displayName)}</div>
                         <div style="font-size: 0.75rem; color: rgba(255,255,255,0.7);">${formatSize(packet.size)}</div>
                     </div>
                 </div>
-                <div style="display:flex; gap: 5px; flex-shrink: 0;">
-                    <a href="/api/download/${packet.name}" target="_blank" class="btn btn-sm btn-primary" title="Open" style="border-radius: 4px; padding: 4px 8px; font-size: 0.8rem;">
+                <div style="display:flex; gap: 6px; flex-shrink: 0;">
+                    <a href="${fileUrl}" target="_blank" class="btn btn-sm btn-primary" title="Open" style="border-radius: 4px; padding: 4px 8px; font-size: 0.8rem;">
                         <i class="bi bi-eye"></i>
                     </a>
-                    <a href="/api/download/${packet.name}" download="${packet.name}" class="btn btn-sm btn-success" title="Download & Save" style="border-radius: 4px; padding: 4px 8px; font-size: 0.8rem;">
+                    <a href="${fileUrl}" download="${escapeHtml(displayName)}" class="btn btn-sm btn-success" title="Download & Save" style="border-radius: 4px; padding: 4px 8px; font-size: 0.8rem;">
                         <i class="bi bi-download"></i> Save
                     </a>
                 </div>

@@ -32,3 +32,13 @@ def register():
     if 'user_id' in session:
         return redirect('/')
     return render_template('register.html')
+
+@main_bp.route('/static/uploads/<path:filename>')
+def static_uploads_fallback(filename):
+    import os
+    from flask import current_app, send_from_directory
+    from utils.security import sanitize_filename
+    clean_filename = sanitize_filename(os.path.basename(filename))
+    upload_folder = current_app.config.get('UPLOAD_FOLDER', os.path.join(current_app.root_path, 'uploads'))
+    return send_from_directory(upload_folder, clean_filename)
+
