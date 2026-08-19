@@ -2,6 +2,19 @@ window.messagesCache = window.messagesCache || {};
 window.isSelectionMode = window.isSelectionMode || false;
 window.selectedMessageIds = window.selectedMessageIds || new Set();
 
+function generateUUID() {
+    if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+        try {
+            return crypto.randomUUID();
+        } catch (e) {}
+    }
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+        var r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
+        return v.toString(16);
+    });
+}
+window.generateUUID = generateUUID;
+
 function formatSize(bytes) {
     if(!bytes) return "";
     if (bytes < 1024) return bytes + " B";
@@ -393,7 +406,7 @@ if(document.getElementById('send-btn')) {
             to: currentTarget,
             content: i.value,
             time: new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}),
-            msg_id: crypto.randomUUID(),
+            msg_id: generateUUID(),
             status: 'sent',
             sender: myUsername,
             reply_to: window.currentReplyTo ? window.currentReplyTo.msg_id : null,
@@ -451,7 +464,7 @@ if(document.getElementById('send-btn')) {
                 name: d.filename,
                 size: d.size,
                 time: new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}),
-                msg_id: crypto.randomUUID(),
+                msg_id: generateUUID(),
                 status: 'sent',
                 sender: myUsername,
                 reply_to: window.currentReplyTo ? window.currentReplyTo.msg_id : null,
@@ -505,7 +518,7 @@ if(document.getElementById('send-btn')) {
                             name: d.filename,
                             size: d.size,
                             time: new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}),
-                            msg_id: crypto.randomUUID(),
+                            msg_id: generateUUID(),
                             status: 'sent',
                             sender: myUsername,
                             reply_to: window.currentReplyTo ? window.currentReplyTo.msg_id : null,
@@ -907,7 +920,7 @@ window.forwardMessagesToTarget = function(targetUser) {
             size: original.size || '',
             data: original.data || '',
             time: new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}),
-            msg_id: crypto.randomUUID(),
+            msg_id: generateUUID(),
             status: 'sent',
             sender: myUsername
         };
