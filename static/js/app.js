@@ -453,26 +453,36 @@ if(document.getElementById('send-btn')) {
         const fd = new FormData();
         fd.append('file', file);
         
-        const res = await fetch('/api/upload', {method: 'POST', body: fd});
-        const data = await res.json();
-        
-        if(data.success) {
-            const d = data.data || data;
-            const packet = {
-                type: 'file',
-                to: currentTarget,
-                name: d.filename,
-                size: d.size,
-                time: new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}),
-                msg_id: generateUUID(),
-                status: 'sent',
-                sender: myUsername,
-                reply_to: window.currentReplyTo ? window.currentReplyTo.msg_id : null,
-                reply_content: window.currentReplyTo ? (window.currentReplyTo.sender + ': ' + window.currentReplyTo.preview) : null,
-            };
-            socket.emit('send_message', packet);
-            window.appendMessage(packet);
-            if (window.currentReplyTo) window.cancelReply();
+        try {
+            const res = await fetch('/api/upload', {method: 'POST', body: fd});
+            const data = await res.json();
+            
+            if(data.success) {
+                const d = data.data || data;
+                const packet = {
+                    type: 'file',
+                    to: currentTarget,
+                    name: d.filename,
+                    size: d.size,
+                    time: new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}),
+                    msg_id: generateUUID(),
+                    status: 'sent',
+                    sender: myUsername,
+                    reply_to: window.currentReplyTo ? window.currentReplyTo.msg_id : null,
+                    reply_content: window.currentReplyTo ? (window.currentReplyTo.sender + ': ' + window.currentReplyTo.preview) : null,
+                };
+                socket.emit('send_message', packet);
+                window.appendMessage(packet);
+                if (window.currentReplyTo) window.cancelReply();
+            } else {
+                const errMsg = (data.error && data.error.message) ? data.error.message : (data.error || 'Upload failed');
+                alert('Upload failed: ' + errMsg);
+            }
+        } catch (err) {
+            console.error('File upload error:', err);
+            alert('File upload failed: ' + err.message);
+        } finally {
+            e.target.value = '';
         }
     };
     
@@ -507,26 +517,34 @@ if(document.getElementById('send-btn')) {
                     const fd = new FormData();
                     fd.append('file', audioBlob, 'voice_message.webm');
                     
-                    const res = await fetch('/api/upload', {method: 'POST', body: fd});
-                    const data = await res.json();
-                    
-                    if(data.success) {
-                        const d = data.data || data;
-                        const packet = {
-                            type: 'file',
-                            to: currentTarget,
-                            name: d.filename,
-                            size: d.size,
-                            time: new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}),
-                            msg_id: generateUUID(),
-                            status: 'sent',
-                            sender: myUsername,
-                            reply_to: window.currentReplyTo ? window.currentReplyTo.msg_id : null,
-                            reply_content: window.currentReplyTo ? (window.currentReplyTo.sender + ': ' + window.currentReplyTo.preview) : null,
-                        };
-                        socket.emit('send_message', packet);
-                        window.appendMessage(packet);
-                        if (window.currentReplyTo) window.cancelReply();
+                    try {
+                        const res = await fetch('/api/upload', {method: 'POST', body: fd});
+                        const data = await res.json();
+                        
+                        if(data.success) {
+                            const d = data.data || data;
+                            const packet = {
+                                type: 'file',
+                                to: currentTarget,
+                                name: d.filename,
+                                size: d.size,
+                                time: new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}),
+                                msg_id: generateUUID(),
+                                status: 'sent',
+                                sender: myUsername,
+                                reply_to: window.currentReplyTo ? window.currentReplyTo.msg_id : null,
+                                reply_content: window.currentReplyTo ? (window.currentReplyTo.sender + ': ' + window.currentReplyTo.preview) : null,
+                            };
+                            socket.emit('send_message', packet);
+                            window.appendMessage(packet);
+                            if (window.currentReplyTo) window.cancelReply();
+                        } else {
+                            const errMsg = (data.error && data.error.message) ? data.error.message : (data.error || 'Upload failed');
+                            alert('Voice upload failed: ' + errMsg);
+                        }
+                    } catch (err) {
+                        console.error('Voice upload error:', err);
+                        alert('Voice upload error: ' + err.message);
                     }
                 };
                 
