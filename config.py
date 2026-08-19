@@ -32,3 +32,11 @@ class Config:
     TURN_USERNAME = os.environ.get('TURN_USERNAME') or 'openrelayproject'
     TURN_CREDENTIAL = os.environ.get('TURN_CREDENTIAL') or 'openrelayproject'
 
+    # Self-Hosted Coturn STUN/TURN configuration
+    COTURN_DOMAIN = os.environ.get('COTURN_DOMAIN', 'falconchat.duckdns.org')
+    COTURN_AUTH_SECRET = os.environ.get(
+        'COTURN_AUTH_SECRET',
+        'e7c8f2a1b9d4e3f6a8b0c2d4e6f8a0b2c4d6e8f0a2b4c6d8e0f2a4b6c8d0e2f4'
+    )
+
+

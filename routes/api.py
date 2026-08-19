@@ -298,43 +298,80 @@ def save_fcm_token():
     db.session.commit()
     return success_response()
 
+def _generate_coturn_credentials(username: str, secret: str, ttl_seconds: int = 86400):
+    """Generate dynamic time-limited HMAC-SHA1 credentials for Coturn REST API (RFC 5766)."""
+    import hmac
+    import hashlib
+    import base64
+    import time
+    expiry = int(time.time()) + ttl_seconds
+    turn_username = f"{expiry}:{username}"
+    digest = hmac.new(secret.encode('utf-8'), turn_username.encode('utf-8'), hashlib.sha1).digest()
+    turn_password = base64.b64encode(digest).decode('utf-8')
+    return turn_username, turn_password
+
 @api_bp.route('/webrtc_config', methods=['GET'])
 @rate_limit(WEBRTC_CONFIG_LIMIT, key_func=ip_key)
 def get_webrtc_config():
     if 'user_id' not in session:
         return error_response(ErrorCode.AUTH_NOT_AUTHENTICATED[0], "Not authenticated", status_code=401)
         
-    turn_url = current_app.config.get('TURN_SERVER', 'turn:openrelay.metered.ca:80')
-    username = current_app.config.get('TURN_USERNAME', 'openrelayproject')
-    credential = current_app.config.get('TURN_CREDENTIAL', 'openrelayproject')
-    
-    # Extract host:port from the config URL
-    host_port = turn_url.split('turn:')[-1].split('?')[0]
-    
-    return success_response({"iceServers": [
-            { "urls": "stun:stun.l.google.com:19302" },
-            { "urls": "stun:stun1.l.google.com:19302" },
-            { "urls": "stun:stun2.l.google.com:19302" },
-            { "urls": "stun:stun3.l.google.com:19302" },
-            { "urls": "stun:stun4.l.google.com:19302" },
-            { "urls": f"stun:{host_port}" },
-            {
-                "urls": f"turn:{host_port}",
-                "username": username,
-                "credential": credential
-            },
-            {
-                "urls": f"turn:{host_port.split(':')[0]}:443",
-                "username": username,
-                "credential": credential
-            },
-            {
-                "urls": f"turn:{host_port.split(':')[0]}:443?transport=tcp",
-                "username": username,
-                "credential": credential
-            }
-        ]
-    })
+    user = User.query.get(session['user_id'])
+    username_prefix = user.username if user else f"user_{session['user_id']}"
+
+    domain = current_app.config.get('COTURN_DOMAIN', 'falconchat.duckdns.org')
+    secret = current_app.config.get(
+        'COTURN_AUTH_SECRET',
+        'e7c8f2a1b9d4e3f6a8b0c2d4e6f8a0b2c4d6e8f0a2b4c6d8e0f2a4b6c8d0e2f4'
+    )
+
+    # Generate dynamic 24-hour token for Coturn
+    turn_user, turn_pass = _generate_coturn_credentials(username_prefix, secret, ttl_seconds=86400)
+
+    ice_servers = [
+        # Google Global STUNs
+        {"urls": "stun:stun.l.google.com:19302"},
+        {"urls": "stun:stun1.l.google.com:19302"},
+        # Self-Hosted Coturn STUN
+        {"urls": f"stun:{domain}:3478"},
+        # Self-Hosted Coturn Low-Latency UDP TURN
+        {
+            "urls": f"turn:{domain}:3478?transport=udp",
+            "username": turn_user,
+            "credential": turn_pass
+        },
+        # Self-Hosted Coturn TCP TURN
+        {
+            "urls": f"turn:{domain}:3478?transport=tcp",
+            "username": turn_user,
+            "credential": turn_pass
+        },
+        # Self-Hosted Coturn Secure TLS TURNS (Port 5349)
+        {
+            "urls": f"turns:{domain}:5349?transport=tcp",
+            "username": turn_user,
+            "credential": turn_pass
+        },
+        # Redundant public relay fallbacks
+        {
+            "urls": "turn:openrelay.metered.ca:80",
+            "username": "openrelayproject",
+            "credential": "openrelayproject"
+        },
+        {
+            "urls": "turn:openrelay.metered.ca:443",
+            "username": "openrelayproject",
+            "credential": "openrelayproject"
+        },
+        {
+            "urls": "turns:openrelay.metered.ca:443?transport=tcp",
+            "username": "openrelayproject",
+            "credential": "openrelayproject"
+        }
+    ]
+
+    return success_response({"iceServers": ice_servers})
+
 
 
 # --- GROUP CHAT ENDPOINTS ---
