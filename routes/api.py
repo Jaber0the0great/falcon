@@ -157,7 +157,7 @@ def upload_file():
 
     # Sanitize: strip path separators, restrict to safe character set
     safe_name = sanitize_filename(normalized_name)
-    if not safe_name or safe_name == "untitled":
+    if not safe_name:
         return error_response(ErrorCode.VALIDATION_INVALID_INPUT[0], "Invalid filename", status_code=400)
 
     # ── Layer 2: Extension validation (allowlist) ───────────────────────
@@ -165,16 +165,25 @@ def upload_file():
     # Reject files without a detectable extension
     last_ext = os.path.splitext(safe_name)[1].lower()
     if not last_ext:
-        return error_response(ErrorCode.VALIDATION_INVALID_INPUT[0], "Invalid filename", status_code=400)
+        return error_response(ErrorCode.VALIDATION_INVALID_INPUT[0], "Invalid filename: missing extension", status_code=400)
 
-    # Check every extension segment against the allowlist.
-    # This naturally catches double-extensions (e.g. image.png.exe)
-    # because .exe is not in the allowlist.
-    parts = safe_name.split('.')
-    for i in range(1, len(parts)):
-        ext = '.' + parts[i].lower()
-        if ext not in ALLOWED_EXTENSIONS:
-            return error_response(ErrorCode.FILE_INVALID_TYPE[0], "File type not allowed.", status_code=400)
+    # Reject dangerous executable extensions
+    DANGEROUS_EXTS = {
+        '.exe', '.bat', '.cmd', '.sh', '.msi', '.vbs', '.js', '.jar',
+        '.scr', '.pif', '.com', '.cpl', '.gadget', '.hta', '.wsf',
+        '.php', '.phtml', '.py', '.pl', '.cgi', '.asp', '.aspx', '.jsp'
+    }
+
+    # Verify final extension is allowed
+    if last_ext not in ALLOWED_EXTENSIONS or last_ext in DANGEROUS_EXTS:
+        return error_response(ErrorCode.FILE_INVALID_TYPE[0], f"File type '{last_ext}' is not allowed.", status_code=400)
+
+    # Reject double-extensions containing dangerous executables (e.g. payload.exe.jpg)
+    parts = safe_name.lower().split('.')
+    for seg in parts[:-1]:
+        if f".{seg}" in DANGEROUS_EXTS:
+            return error_response(ErrorCode.FILE_INVALID_TYPE[0], "Dangerous executable extensions are not allowed.", status_code=400)
+
 
     # ── Layer 3: File-size validation ───────────────────────────────────
 

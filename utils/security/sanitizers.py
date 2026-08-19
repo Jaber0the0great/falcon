@@ -33,12 +33,10 @@ def sanitize_html(text: str) -> str:
 
 
 def sanitize_filename(filename: str) -> str:
-    """Sanitize a filename to prevent path-traversal attacks.
+    """Sanitize a filename to prevent path-traversal attacks while preserving Unicode/Arabic names.
 
-    Removes directory separators and restricts the result to alphanumeric
-    characters, underscores, hyphens, and dots.  If the result is empty
-    or too long the original basename is returned as a fallback (with
-    path components removed).
+    Removes directory separators and dangerous OS characters. Preserves Arabic,
+    Unicode characters, spaces, hyphens, underscores, and file extensions.
 
     Args:
         filename: The raw filename (may include full path).
@@ -47,24 +45,23 @@ def sanitize_filename(filename: str) -> str:
         A safe filename string.
     """
     if not filename:
-        return "untitled"
+        return "document"
 
-    # Strip any leading path components
-    safe = os.path.basename(filename)
+    safe = os.path.basename(filename).strip()
+    # Strip directory traversal, control chars, and forbidden filesystem characters
+    safe = re.sub(r'[\r\n\t\x00-\x1f\\/*?:"<>|]', '_', safe)
+    safe = re.sub(r'\.{2,}', '.', safe)  # collapse multiple dots
+    safe = safe.lstrip('. ')
 
-    # Remove anything that isn't alphanumeric, underscore, hyphen, or dot
-    safe = re.sub(r'[^a-zA-Z0-9_\-\.]', '', safe)
+    root, ext = os.path.splitext(safe)
+    if not root:
+        root = "document"
 
-    # If sanitization emptied the name, fall back to basename stripped of paths
-    if not safe:
-        safe = re.sub(r'[^a-zA-Z0-9_\-\.]', '', os.path.basename(filename))
+    if len(root) > 100:
+        root = root[:100]
 
-    # Truncate to maximum length while preserving extension
-    if len(safe) > MAX_FILE_NAME_LENGTH:
-        root, ext = os.path.splitext(safe)
-        safe = root[:MAX_FILE_NAME_LENGTH - len(ext)] + ext
+    return f"{root}{ext.lower()}"
 
-    return safe or "untitled"
 
 
 def sanitize_display_text(text: str) -> str:
