@@ -87,17 +87,17 @@ class WebRTCManager {
                     <div class="call-meta">
                         <h3 id="call-title" class="call-username">Connecting...</h3>
                         <div class="call-submeta">
-                            <span id="call-timer" class="call-duration" role="timer">00:00</span>
+                            <span id="call-timer" class="call-duration" aria-hidden="true">00:00</span>
                             <span class="call-quality-badge" id="call-quality-badge">🔒 Encrypted</span>
                         </div>
                     </div>
                 </div>
                 <div class="call-window-actions">
-                    <button id="call-minimize-btn" onclick="window.webrtcManager.toggleMinimizeCall()" class="call-win-btn" title="Minimize/Floating Window" type="button" aria-label="Minimize Window">
-                        <i class="bi bi-dash-lg" id="minimize-icon"></i>
+                    <button id="call-minimize-btn" onclick="window.webrtcManager.toggleMinimizeCall()" class="call-win-btn" title="Minimize Floating Window" type="button" aria-label="Minimize Floating Window">
+                        <i class="bi bi-dash-lg" id="minimize-icon" aria-hidden="true"></i>
                     </button>
-                    <button id="call-fullscreen-btn" onclick="window.webrtcManager.toggleFullscreenCall()" class="call-win-btn" title="Toggle Fullscreen" type="button" aria-label="Fullscreen">
-                        <i class="bi bi-arrows-fullscreen"></i>
+                    <button id="call-fullscreen-btn" onclick="window.webrtcManager.toggleFullscreenCall()" class="call-win-btn" title="Toggle Fullscreen" type="button" aria-label="Toggle Fullscreen">
+                        <i class="bi bi-arrows-fullscreen" aria-hidden="true"></i>
                     </button>
                 </div>
             </div>
@@ -127,23 +127,23 @@ class WebRTCManager {
 
             <!-- Bottom Floating Action Bar -->
             <div class="call-controls-bar" role="group" aria-label="Call Controls">
-                <button id="accept-call-btn" onclick="window.webrtcManager.acceptCall()" class="call-btn btn-accept" style="display:none;" title="Answer Call" type="button">
-                    <span class="visually-hidden">Answer Call</span><i class="bi bi-telephone-fill"></i>
+                <button id="accept-call-btn" onclick="window.webrtcManager.acceptCall()" class="call-btn btn-accept" style="display:none;" title="Answer Call" aria-label="Answer Call" type="button">
+                    <i class="bi bi-telephone-fill" aria-hidden="true"></i>
                 </button>
-                <button id="reject-call-btn" onclick="window.webrtcManager.rejectCall()" class="call-btn btn-reject" style="display:none;" title="Decline Call" type="button">
-                    <span class="visually-hidden">Reject Call</span><i class="bi bi-telephone-x-fill"></i>
+                <button id="reject-call-btn" onclick="window.webrtcManager.rejectCall()" class="call-btn btn-reject" style="display:none;" title="Decline Call" aria-label="Decline Call" type="button">
+                    <i class="bi bi-telephone-x-fill" aria-hidden="true"></i>
                 </button>
-                <button id="mute-call-btn" onclick="window.webrtcManager.toggleMute()" class="call-btn btn-secondary" style="display:none;" title="Mute Microphone" type="button">
-                    <span class="visually-hidden">Mute Microphone</span><i class="bi bi-mic-fill" id="mute-icon"></i>
+                <button id="mute-call-btn" onclick="window.webrtcManager.toggleMute()" class="call-btn btn-secondary" style="display:none;" title="Mute Microphone" aria-label="Mute Microphone" type="button">
+                    <i class="bi bi-mic-fill" id="mute-icon" aria-hidden="true"></i>
                 </button>
-                <button id="video-toggle-btn" onclick="window.webrtcManager.toggleVideo()" class="call-btn btn-secondary" style="display:none;" title="Toggle Camera" type="button">
-                    <span class="visually-hidden">Toggle Video</span><i class="bi bi-camera-video-fill" id="video-icon"></i>
+                <button id="video-toggle-btn" onclick="window.webrtcManager.toggleVideo()" class="call-btn btn-secondary" style="display:none;" title="Turn On Camera" aria-label="Turn On Camera" type="button">
+                    <i class="bi bi-camera-video-fill" id="video-icon" aria-hidden="true"></i>
                 </button>
-                <button id="screenshare-call-btn" onclick="window.webrtcManager.toggleScreenShare()" class="call-btn btn-secondary" style="display:none;" title="Share Screen" type="button">
-                    <span class="visually-hidden">Share Screen</span><i class="bi bi-display" id="screenshare-icon"></i>
+                <button id="screenshare-call-btn" onclick="window.webrtcManager.toggleScreenShare()" class="call-btn btn-secondary" style="display:none;" title="Share Screen" aria-label="Share Screen" type="button">
+                    <i class="bi bi-display" id="screenshare-icon" aria-hidden="true"></i>
                 </button>
-                <button id="end-call-btn" onclick="window.webrtcManager.endCall(true)" class="call-btn btn-end" style="display:none;" title="End Call" type="button">
-                    <span class="visually-hidden">End Call</span><i class="bi bi-telephone-fill" style="transform: rotate(135deg); display: inline-block;"></i>
+                <button id="end-call-btn" onclick="window.webrtcManager.endCall(true)" class="call-btn btn-end" style="display:none;" title="End Call" aria-label="End Call" type="button">
+                    <i class="bi bi-telephone-fill" style="transform: rotate(135deg); display: inline-block;" aria-hidden="true"></i>
                 </button>
             </div>
         </div>`;
@@ -548,11 +548,10 @@ class WebRTCManager {
             const isEnabled = videoTrack.enabled;
             if (videoBtnEl) {
                 videoBtnEl.style.background = isEnabled ? '#3b82f6' : '#64748b';
-                videoBtnEl.title = isEnabled ? "Turn Off Camera" : "Turn On Camera";
-                videoBtnEl.setAttribute('aria-label', isEnabled ? "Turn Off Camera" : "Turn On Camera");
+                const vLabel = isEnabled ? "Turn Off Camera" : "Turn On Camera";
+                videoBtnEl.title = vLabel;
+                videoBtnEl.setAttribute('aria-label', vLabel);
                 videoBtnEl.setAttribute('aria-pressed', isEnabled.toString());
-                const vh = videoBtnEl.querySelector('.visually-hidden');
-                if (vh) vh.textContent = isEnabled ? "Turn Off Camera" : "Turn On Camera";
             }
             if (localVid) {
                 localVid.style.display = isEnabled ? 'block' : 'none';
@@ -608,8 +607,6 @@ class WebRTCManager {
                     videoBtnEl.title = "Turn Off Camera";
                     videoBtnEl.setAttribute('aria-label', "Turn Off Camera");
                     videoBtnEl.setAttribute('aria-pressed', "true");
-                    const vh = videoBtnEl.querySelector('.visually-hidden');
-                    if (vh) vh.textContent = "Turn Off Camera";
                 }
 
                 if (this.callTarget) {
@@ -643,8 +640,6 @@ class WebRTCManager {
                 screenBtnEl.title = "Share Screen";
                 screenBtnEl.setAttribute('aria-label', "Share Screen");
                 screenBtnEl.setAttribute('aria-pressed', "false");
-                const vh = screenBtnEl.querySelector('.visually-hidden');
-                if (vh) vh.textContent = "Share Screen";
             }
             
             const videoTrack = this.localStream ? this.localStream.getVideoTracks()[0] : null;
@@ -680,8 +675,6 @@ class WebRTCManager {
                     screenBtnEl.title = "Stop Screen Sharing";
                     screenBtnEl.setAttribute('aria-label', "Stop Screen Sharing");
                     screenBtnEl.setAttribute('aria-pressed', "true");
-                    const vh = screenBtnEl.querySelector('.visually-hidden');
-                    if (vh) vh.textContent = "Stop Screen Sharing";
                 }
                 
                 if (localVid) {
@@ -717,8 +710,6 @@ class WebRTCManager {
                     muteBtnEl.title = label;
                     muteBtnEl.setAttribute('aria-label', label);
                     muteBtnEl.setAttribute('aria-pressed', (!track.enabled).toString());
-                    const vh = muteBtnEl.querySelector('.visually-hidden');
-                    if (vh) vh.textContent = label;
                     if (track.enabled) {
                         muteBtnEl.classList.remove('muted-state');
                         muteBtnEl.style.background = 'rgba(255, 255, 255, 0.12)';
@@ -1431,8 +1422,27 @@ class WebRTCManager {
             remoteVid.srcObject = null;
             remoteVid.style.display = 'none';
         }
-        if (this.videoBtn) this.videoBtn.style.background = '#64748b';
-        if (this.screenShareBtn) this.screenShareBtn.style.background = '#64748b';
+        if (this.videoBtn) {
+            this.videoBtn.style.background = '#64748b';
+            this.videoBtn.title = "Turn On Camera";
+            this.videoBtn.setAttribute('aria-label', "Turn On Camera");
+            this.videoBtn.setAttribute('aria-pressed', "false");
+        }
+        if (this.muteBtn) {
+            this.muteBtn.classList.remove('muted-state');
+            this.muteBtn.style.background = 'rgba(255, 255, 255, 0.12)';
+            this.muteBtn.title = "Mute Microphone";
+            this.muteBtn.setAttribute('aria-label', "Mute Microphone");
+            this.muteBtn.setAttribute('aria-pressed', "false");
+            const muteIcon = document.getElementById('mute-icon');
+            if (muteIcon) muteIcon.className = 'bi bi-mic-fill';
+        }
+        if (this.screenShareBtn) {
+            this.screenShareBtn.style.background = '#64748b';
+            this.screenShareBtn.title = "Share Screen";
+            this.screenShareBtn.setAttribute('aria-label', "Share Screen");
+            this.screenShareBtn.setAttribute('aria-pressed', "false");
+        }
 
         if (this._audioHealthTimer) {
             clearTimeout(this._audioHealthTimer);
