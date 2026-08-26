@@ -64,6 +64,7 @@ class WebRTCManager {
     get endBtn() { return document.getElementById('end-call-btn'); }
     get muteBtn() { return document.getElementById('mute-call-btn'); }
     get videoBtn() { return document.getElementById('video-toggle-btn'); }
+    get screenShareBtn() { return document.getElementById('screenshare-call-btn'); }
     get minimizeBtn() { return document.getElementById('call-minimize-btn'); }
     get fullscreenBtn() { return document.getElementById('call-fullscreen-btn'); }
     get audioPlaceholder() { return document.getElementById('call-audio-placeholder'); }
