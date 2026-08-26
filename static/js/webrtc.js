@@ -273,7 +273,7 @@ class WebRTCManager {
         }
     }
     
-    showRingingUI(caller) {
+    showRingingUI(caller, isVideo = false) {
         const scr = this.screen;
         if(!scr) return;
         scr.classList.remove('d-none');
@@ -281,9 +281,12 @@ class WebRTCManager {
         scr.style.display = 'flex';
         scr.focus();
         
-        if(this.title) this.title.innerText = caller;
-        if(this.statusLabel) this.statusLabel.innerText = "Incoming call...";
+        if(this.title) this.title.innerText = isVideo ? `Video Call: ${caller}` : `Voice Call: ${caller}`;
+        if(this.statusLabel) this.statusLabel.innerText = isVideo ? "Incoming Video Call..." : "Incoming Voice Call...";
         if(this.timer) this.timer.innerText = "00:00";
+        
+        const avatarIcon = document.getElementById('call-center-avatar-text');
+        if(avatarIcon) avatarIcon.innerText = isVideo ? '📹' : '📞';
         
         const placeholder = this.audioPlaceholder;
         if(placeholder) placeholder.style.display = 'flex';
@@ -325,12 +328,16 @@ class WebRTCManager {
         if(this.statusLabel) this.statusLabel.innerText = "Connected (HD)";
         
         const placeholder = this.audioPlaceholder;
+        const localActive = this.localStream && this.localStream.getVideoTracks().some(t => t.enabled);
+        
         if (this.isVideoCall) {
             if(placeholder) placeholder.style.display = 'none';
             if(this.remoteVideo) this.remoteVideo.style.display = 'block';
-            if(this.localVideoWrapper) this.localVideoWrapper.style.display = 'block';
+            if(this.localVideoWrapper) this.localVideoWrapper.style.display = localActive ? 'block' : 'none';
         } else {
             if(placeholder) placeholder.style.display = 'flex';
+            if(this.remoteVideo) this.remoteVideo.style.display = 'none';
+            if(this.localVideoWrapper) this.localVideoWrapper.style.display = 'none';
         }
         
         if(this.acceptBtn) this.acceptBtn.style.display = 'none';
@@ -761,6 +768,7 @@ class WebRTCManager {
             }
             this.callTarget = data.from;
             this.isCaller = false;
+            this.isVideoCall = !!data.isVideo;
             const sdpContent = data.sdp || (data.offer ? data.offer.sdp : '');
             this.incomingOffer = data.offer || { type: 'offer', sdp: sdpContent };
             this.incomingSdp = sdpContent;
@@ -771,7 +779,7 @@ class WebRTCManager {
                 window.selectUser(data.from);
             }
             
-            this.showRingingUI(data.from);
+            this.showRingingUI(data.from, this.isVideoCall);
             
         } else if(data.type === 'accepted') {
             // INSTANT feedback from receiver that they clicked Accept
