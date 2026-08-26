@@ -329,11 +329,9 @@ def get_webrtc_config():
     turn_user, turn_pass = _generate_coturn_credentials(username_prefix, secret, ttl_seconds=86400)
 
     ice_servers = [
-        # Google Global STUNs
-        {"urls": "stun:stun.l.google.com:19302"},
-        {"urls": "stun:stun1.l.google.com:19302"},
-        # Self-Hosted Coturn STUN
+        # Self-Hosted Coturn STUN (Domain & IP)
         {"urls": f"stun:{domain}:3478"},
+        {"urls": "stun:193.122.83.255:3478"},
         # Self-Hosted Coturn Low-Latency UDP TURN
         {
             "urls": f"turn:{domain}:3478?transport=udp",
@@ -351,22 +349,6 @@ def get_webrtc_config():
             "urls": f"turns:{domain}:5349?transport=tcp",
             "username": turn_user,
             "credential": turn_pass
-        },
-        # Redundant public relay fallbacks
-        {
-            "urls": "turn:openrelay.metered.ca:80",
-            "username": "openrelayproject",
-            "credential": "openrelayproject"
-        },
-        {
-            "urls": "turn:openrelay.metered.ca:443",
-            "username": "openrelayproject",
-            "credential": "openrelayproject"
-        },
-        {
-            "urls": "turns:openrelay.metered.ca:443?transport=tcp",
-            "username": "openrelayproject",
-            "credential": "openrelayproject"
         }
     ]
 

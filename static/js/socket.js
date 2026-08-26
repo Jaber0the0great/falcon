@@ -101,7 +101,11 @@ window.selectUser = function(targetName, element) {
     if(cTitle) cTitle.innerText = targetName === 'All' ? '📢 Broadcast Room' : targetName;
     
     const vcBtn = document.getElementById('voice-call-btn');
+    const vidBtn = document.getElementById('video-call-btn');
+    const gcBtn = document.getElementById('group-call-btn');
     if(vcBtn) vcBtn.style.display = targetName === 'All' ? 'none' : 'flex';
+    if(vidBtn) vidBtn.style.display = targetName === 'All' ? 'none' : 'flex';
+    if(gcBtn) gcBtn.style.display = 'none';
     
     if (typeof window.loadHistory === 'function') {
         window.loadHistory();
@@ -764,8 +768,10 @@ window.selectGroup = function(groupName, element) {
     
     // Call buttons
     const vcBtn = document.getElementById('voice-call-btn');
+    const vidBtn = document.getElementById('video-call-btn');
     const gcBtn = document.getElementById('group-call-btn');
     if(vcBtn) vcBtn.style.display = 'none';
+    if(vidBtn) vidBtn.style.display = 'none';
     if(gcBtn) gcBtn.style.display = g.is_member ? 'flex' : 'none';
     
     const leaveBtn = document.getElementById('leave-group-btn');
