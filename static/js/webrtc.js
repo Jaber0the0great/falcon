@@ -617,7 +617,20 @@ class WebRTCManager {
                     videoBtnEl.setAttribute('aria-pressed', "true");
                 }
 
-                if (this.callTarget) {
+                if (this.callTarget && this.peerConnection) {
+                    try {
+                        const offer = await this.peerConnection.createOffer();
+                        await this.peerConnection.setLocalDescription(offer);
+                        socket.emit('webrtc_signaling', {
+                            to: this.callTarget,
+                            from: myUsername,
+                            type: 'offer',
+                            sdp: offer.sdp,
+                            isVideo: true
+                        });
+                    } catch(renegErr) {
+                        console.warn("Renegotiation offer error:", renegErr);
+                    }
                     socket.emit('webrtc_signaling', {
                         to: this.callTarget,
                         from: myUsername,
