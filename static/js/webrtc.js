@@ -17,9 +17,37 @@ class WebRTCManager {
         this.isInGroupCall = false;
         this.groupCallName = '';
         this.groupPeerConnections = {}; // username -> RTCPeerConnection
+        this.ringingTimeout = null;
         
         this.ensureDOMExists();
         this.loadWebRTCConfig();
+    }
+
+    startRingingTimeout(target) {
+        this.clearRingingTimeout();
+        this.ringingTimeout = setTimeout(() => {
+            console.log("Outgoing call ringing timed out for target:", target);
+            this.showErrorUI("No answer");
+            if (this.isCaller) {
+                this.saveCallLog('missed', 0);
+            }
+            if (this.callTarget) {
+                socket.emit('webrtc_signaling', {
+                    to: this.callTarget,
+                    from: myUsername,
+                    type: 'end_call'
+                });
+            }
+            this.cleanup();
+            setTimeout(() => this.hideCallUI(), 2500);
+        }, 40000);
+    }
+
+    clearRingingTimeout() {
+        if (this.ringingTimeout) {
+            clearTimeout(this.ringingTimeout);
+            this.ringingTimeout = null;
+        }
     }
 
     async loadWebRTCConfig(force = false) {
@@ -305,6 +333,13 @@ class WebRTCManager {
         const ringSnd = this.ringSound;
         if(ringSnd) ringSnd.play().catch(e => console.log("Audio play blocked", e));
         
+        this.clearRingingTimeout();
+        this.ringingTimeout = setTimeout(() => {
+            console.log("Incoming call timed out without answer");
+            this.cleanup();
+            this.hideCallUI();
+        }, 45000);
+        
         const layout = document.querySelector('.chat-layout');
         if (layout) {
             layout.classList.add('active-chat');
@@ -347,6 +382,7 @@ class WebRTCManager {
         if(this.videoBtn) this.videoBtn.style.display = 'flex';
         if(this.screenShareBtn) this.screenShareBtn.style.display = 'flex';
         
+        this.clearRingingTimeout();
         this.startTimer();
         this.startAudioHealthMonitor();
     }
@@ -448,6 +484,7 @@ class WebRTCManager {
         this.iceQueue = [];
         
         this.showCallingUI(target);
+        this.startRingingTimeout(target);
         
         const audioEl = this.remoteAudio;
         if(audioEl) {
@@ -497,6 +534,7 @@ class WebRTCManager {
         this.iceQueue = [];
         
         this.showCallingUI(target);
+        this.startRingingTimeout(target);
         
         const audioEl = this.remoteAudio;
         if(audioEl) {
@@ -826,7 +864,7 @@ class WebRTCManager {
                 this.saveCallLog('rejected', 0);
             }
             this.cleanup();
-            setTimeout(() => this.hideCallUI(), 3000);
+            setTimeout(() => this.hideCallUI(), 2500);
             
         } else if(data.type === 'busy') {
             this.showErrorUI(`${data.from} is busy in another call`);
@@ -834,7 +872,15 @@ class WebRTCManager {
                 this.saveCallLog('busy', 0);
             }
             this.cleanup();
-            setTimeout(() => this.hideCallUI(), 3000);
+            setTimeout(() => this.hideCallUI(), 2500);
+            
+        } else if(data.type === 'no_answer' || data.type === 'timeout') {
+            this.showErrorUI(`${data.from || 'User'} did not answer`);
+            if (this.isCaller) {
+                this.saveCallLog('missed', 0);
+            }
+            this.cleanup();
+            setTimeout(() => this.hideCallUI(), 2500);
             
         } else if(data.type === 'video_toggle') {
             const remoteVideoOn = !!data.isVideoOn;
@@ -1470,6 +1516,7 @@ class WebRTCManager {
             clearTimeout(this._audioHealthTimer);
             this._audioHealthTimer = null;
         }
+        this.clearRingingTimeout();
         this._hasRecoveredAudio = false;
         clearInterval(this.callTimerInterval);
         const timerEl = this.timer;
