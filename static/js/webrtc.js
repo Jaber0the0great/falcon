@@ -97,6 +97,9 @@ class WebRTCManager {
     get fullscreenBtn() { return document.getElementById('call-fullscreen-btn'); }
     get audioPlaceholder() { return document.getElementById('call-audio-placeholder'); }
     get localVideoWrapper() { return document.getElementById('local-video-wrapper'); }
+    get localVideo() { return document.getElementById('local-video'); }
+    get remoteVideo() { return document.getElementById('remote-video'); }
+    get remoteAudio() { return document.getElementById('remote-audio'); }
     get statusLabel() { return document.getElementById('call-status-label'); }
     
     ensureDOMExists() {
@@ -263,6 +266,75 @@ class WebRTCManager {
 
     // --- UI STATE CONTROLLERS ---
     
+    updateVideoUIState(isOn) {
+        const videoBtnEl = this.videoBtn;
+        const videoIcon = document.getElementById('video-icon');
+        const localVid = this.localVideo;
+        const localWrapper = this.localVideoWrapper;
+
+        if (videoBtnEl) {
+            const vLabel = isOn ? "Turn Off Camera" : "Turn On Camera";
+            videoBtnEl.title = vLabel;
+            videoBtnEl.setAttribute('aria-label', vLabel);
+            videoBtnEl.setAttribute('aria-pressed', isOn.toString());
+            if (isOn) {
+                videoBtnEl.classList.add('active-media');
+                videoBtnEl.style.background = 'linear-gradient(135deg, #3b82f6, #2563eb)';
+                if (videoIcon) videoIcon.className = 'bi bi-camera-video-fill';
+            } else {
+                videoBtnEl.classList.remove('active-media');
+                videoBtnEl.style.background = 'rgba(255, 255, 255, 0.12)';
+                if (videoIcon) videoIcon.className = 'bi bi-camera-video-off-fill';
+            }
+        }
+        if (localVid) {
+            localVid.style.display = isOn ? 'block' : 'none';
+        }
+        if (localWrapper) {
+            localWrapper.style.display = isOn ? 'block' : 'none';
+        }
+    }
+
+    updateScreenShareUIState(isSharing) {
+        const screenBtnEl = this.screenShareBtn;
+        const screenIcon = document.getElementById('screenshare-icon');
+        if (screenBtnEl) {
+            const sLabel = isSharing ? "Stop Screen Sharing" : "Share Screen";
+            screenBtnEl.title = sLabel;
+            screenBtnEl.setAttribute('aria-label', sLabel);
+            screenBtnEl.setAttribute('aria-pressed', isSharing.toString());
+            if (isSharing) {
+                screenBtnEl.classList.add('active-screenshare');
+                screenBtnEl.style.background = 'linear-gradient(135deg, #10b981, #059669)';
+                if (screenIcon) screenIcon.className = 'bi bi-display-fill';
+            } else {
+                screenBtnEl.classList.remove('active-screenshare');
+                screenBtnEl.style.background = 'rgba(255, 255, 255, 0.12)';
+                if (screenIcon) screenIcon.className = 'bi bi-display';
+            }
+        }
+    }
+
+    updateMuteUIState(isMuted) {
+        const muteBtnEl = this.muteBtn;
+        const muteIcon = document.getElementById('mute-icon');
+        if (muteBtnEl) {
+            const mLabel = isMuted ? "Unmute Microphone" : "Mute Microphone";
+            muteBtnEl.title = mLabel;
+            muteBtnEl.setAttribute('aria-label', mLabel);
+            muteBtnEl.setAttribute('aria-pressed', isMuted.toString());
+            if (isMuted) {
+                muteBtnEl.classList.add('muted-state');
+                muteBtnEl.style.background = 'linear-gradient(135deg, #ef4444, #b91c1c)';
+                if (muteIcon) muteIcon.className = 'bi bi-mic-mute-fill';
+            } else {
+                muteBtnEl.classList.remove('muted-state');
+                muteBtnEl.style.background = 'rgba(255, 255, 255, 0.12)';
+                if (muteIcon) muteIcon.className = 'bi bi-mic-fill';
+            }
+        }
+    }
+    
     showCallingUI(target) {
         const scr = this.screen;
         if(!scr) return;
@@ -282,7 +354,11 @@ class WebRTCManager {
         if(placeholder) placeholder.style.display = 'flex';
         
         if(this.remoteVideo) this.remoteVideo.style.display = 'none';
-        if(this.localVideoWrapper) this.localVideoWrapper.style.display = this.isVideoCall ? 'block' : 'none';
+        
+        const localActive = !!(this.localStream && this.localStream.getVideoTracks().some(t => t.enabled));
+        this.updateVideoUIState(this.isVideoCall || localActive);
+        this.updateScreenShareUIState(false);
+        this.updateMuteUIState(false);
         
         if(this.acceptBtn) this.acceptBtn.style.display = 'none';
         if(this.rejectBtn) this.rejectBtn.style.display = 'none';
@@ -320,7 +396,9 @@ class WebRTCManager {
         if(placeholder) placeholder.style.display = 'flex';
         
         if(this.remoteVideo) this.remoteVideo.style.display = 'none';
-        if(this.localVideoWrapper) this.localVideoWrapper.style.display = 'none';
+        this.updateVideoUIState(false);
+        this.updateScreenShareUIState(false);
+        this.updateMuteUIState(false);
         
         if(this.acceptBtn) this.acceptBtn.style.display = 'flex';
         if(this.rejectBtn) this.rejectBtn.style.display = 'flex';
@@ -363,16 +441,20 @@ class WebRTCManager {
         if(this.statusLabel) this.statusLabel.innerText = "Connected (HD)";
         
         const placeholder = this.audioPlaceholder;
-        const localActive = this.localStream && this.localStream.getVideoTracks().some(t => t.enabled);
+        const localActive = !!(this.localStream && this.localStream.getVideoTracks().some(t => t.enabled));
         
-        if (this.isVideoCall) {
+        // Synchronize Video and Media Control Buttons UI States
+        this.updateVideoUIState(localActive);
+        this.updateScreenShareUIState(this.isScreenSharing);
+        const isMuted = !!(this.localStream && this.localStream.getAudioTracks().some(t => !t.enabled));
+        this.updateMuteUIState(isMuted);
+
+        if (this.isVideoCall || localActive) {
             if(placeholder) placeholder.style.display = 'none';
             if(this.remoteVideo) this.remoteVideo.style.display = 'block';
-            if(this.localVideoWrapper) this.localVideoWrapper.style.display = localActive ? 'block' : 'none';
         } else {
             if(placeholder) placeholder.style.display = 'flex';
             if(this.remoteVideo) this.remoteVideo.style.display = 'none';
-            if(this.localVideoWrapper) this.localVideoWrapper.style.display = 'none';
         }
         
         if(this.acceptBtn) this.acceptBtn.style.display = 'none';
@@ -548,13 +630,8 @@ class WebRTCManager {
             const localVid = this.localVideo;
             if(localVid) {
                 localVid.srcObject = this.localStream;
-                localVid.style.display = 'block';
             }
-            
-            const videoToggle = this.videoBtn;
-            if(videoToggle) {
-                videoToggle.style.background = '#3b82f6';
-            }
+            this.updateVideoUIState(true);
             
             this.setupPeerConnection(target);
             
@@ -582,26 +659,36 @@ class WebRTCManager {
         }
     }
 
+    getVideoTransceiver() {
+        if (!this.peerConnection) return null;
+        try {
+            return this.peerConnection.getTransceivers().find(t => {
+                return (t.receiver && t.receiver.track && t.receiver.track.kind === 'video') ||
+                       (t.sender && t.sender.track && t.sender.track.kind === 'video') ||
+                       (t.mid && t.mid.toLowerCase().includes('video')) ||
+                       (t.sender && (!t.sender.track || t.sender.track.kind === 'video'));
+            });
+        } catch(e) {
+            return null;
+        }
+    }
+
+    getVideoSender() {
+        const transceiver = this.getVideoTransceiver();
+        if (transceiver && transceiver.sender) return transceiver.sender;
+        return this.peerConnection ? this.peerConnection.getSenders().find(s => (s.track && s.track.kind === 'video') || (!s.track)) : null;
+    }
+
     async toggleVideo() {
         if (!this.peerConnection) return;
         
         let videoTrack = this.localStream ? this.localStream.getVideoTracks()[0] : null;
-        const videoBtnEl = this.videoBtn;
-        const localVid = this.localVideo;
         
         if (videoTrack) {
             videoTrack.enabled = !videoTrack.enabled;
             const isEnabled = videoTrack.enabled;
-            if (videoBtnEl) {
-                videoBtnEl.style.background = isEnabled ? '#3b82f6' : '#64748b';
-                const vLabel = isEnabled ? "Turn Off Camera" : "Turn On Camera";
-                videoBtnEl.title = vLabel;
-                videoBtnEl.setAttribute('aria-label', vLabel);
-                videoBtnEl.setAttribute('aria-pressed', isEnabled.toString());
-            }
-            if (localVid) {
-                localVid.style.display = isEnabled ? 'block' : 'none';
-            }
+            this.updateVideoUIState(isEnabled);
+            
             if (isEnabled) {
                 this.isVideoCall = true;
             } else {
@@ -634,25 +721,23 @@ class WebRTCManager {
                     this.localStream = camStream;
                 }
                 
+                const localVid = this.localVideo;
                 if (localVid) {
                     localVid.srcObject = this.localStream;
-                    localVid.style.display = 'block';
                 }
                 
                 this.isVideoCall = true;
+                this.updateVideoUIState(true);
                 
-                const sender = this.peerConnection.getSenders().find(s => s.track && s.track.kind === 'video');
+                const videoTransceiver = this.getVideoTransceiver();
+                const sender = this.getVideoSender();
                 if (sender) {
                     await sender.replaceTrack(newVideoTrack);
+                    if (videoTransceiver) {
+                        videoTransceiver.direction = 'sendrecv';
+                    }
                 } else {
                     this.peerConnection.addTrack(newVideoTrack, this.localStream);
-                }
-                
-                if (videoBtnEl) {
-                    videoBtnEl.style.background = '#3b82f6';
-                    videoBtnEl.title = "Turn Off Camera";
-                    videoBtnEl.setAttribute('aria-label', "Turn Off Camera");
-                    videoBtnEl.setAttribute('aria-pressed', "true");
                 }
 
                 if (this.callTarget && this.peerConnection) {
@@ -685,7 +770,6 @@ class WebRTCManager {
 
     async toggleScreenShare() {
         if (!this.peerConnection) return;
-        const screenBtnEl = this.screenShareBtn;
         const localVid = this.localVideo;
         
         if (this.isScreenSharing) {
@@ -693,16 +777,26 @@ class WebRTCManager {
                 this.screenStream.getTracks().forEach(t => t.stop());
                 this.screenStream = null;
             }
-            this.isScreenSharing = false;
-            if (screenBtnEl) {
-                screenBtnEl.style.background = '#64748b';
-                screenBtnEl.title = "Share Screen";
-                screenBtnEl.setAttribute('aria-label', "Share Screen");
-                screenBtnEl.setAttribute('aria-pressed', "false");
+            if (this.screenAudioCtx) {
+                try { this.screenAudioCtx.close(); } catch(e) {}
+                this.screenAudioCtx = null;
             }
+            if (this.mixedAudioTrack) {
+                try { this.mixedAudioTrack.stop(); } catch(e) {}
+                this.mixedAudioTrack = null;
+            }
+            this.isScreenSharing = false;
+            this.updateScreenShareUIState(false);
             
+            // Revert audio sender back to pure microphone track
+            const micTrack = this.localStream ? this.localStream.getAudioTracks()[0] : null;
+            const audioSender = this.peerConnection ? this.peerConnection.getSenders().find(s => s.track && s.track.kind === 'audio') : null;
+            if (audioSender && micTrack) {
+                audioSender.replaceTrack(micTrack);
+            }
+
             const videoTrack = this.localStream ? this.localStream.getVideoTracks()[0] : null;
-            const sender = this.peerConnection.getSenders().find(s => s.track && s.track.kind === 'video');
+            const sender = this.getVideoSender();
             if (sender) {
                 await sender.replaceTrack(videoTrack || null);
             }
@@ -714,6 +808,15 @@ class WebRTCManager {
                     localVid.style.display = 'none';
                 }
             }
+
+            if (this.callTarget) {
+                socket.emit('webrtc_signaling', {
+                    to: this.callTarget,
+                    from: myUsername,
+                    type: 'video_toggle',
+                    isVideoOn: !!(videoTrack && videoTrack.enabled)
+                });
+            }
         } else {
             try {
                 if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) {
@@ -722,30 +825,64 @@ class WebRTCManager {
                 }
                 const displayStream = await navigator.mediaDevices.getDisplayMedia({
                     video: { cursor: "always" },
-                    audio: false
+                    audio: {
+                        echoCancellation: false,
+                        noiseSuppression: false,
+                        autoGainControl: false,
+                        suppressLocalAudioPlayback: false
+                    },
+                    systemAudio: "include",
+                    surfaceSwitching: "include"
                 });
                 const screenTrack = displayStream.getVideoTracks()[0];
                 if (!screenTrack) return;
                 
                 this.isScreenSharing = true;
                 this.screenStream = displayStream;
-                if (screenBtnEl) {
-                    screenBtnEl.style.background = '#22c55e';
-                    screenBtnEl.title = "Stop Screen Sharing";
-                    screenBtnEl.setAttribute('aria-label', "Stop Screen Sharing");
-                    screenBtnEl.setAttribute('aria-pressed', "true");
-                }
+                this.updateScreenShareUIState(true);
                 
                 if (localVid) {
                     localVid.srcObject = displayStream;
                     localVid.style.display = 'block';
                 }
                 
-                const sender = this.peerConnection.getSenders().find(s => s.track && s.track.kind === 'video');
+                const videoTransceiver = this.getVideoTransceiver();
+                const sender = this.getVideoSender();
                 if (sender) {
                     await sender.replaceTrack(screenTrack);
+                    if (videoTransceiver) {
+                        videoTransceiver.direction = 'sendrecv';
+                    }
                 } else {
                     this.peerConnection.addTrack(screenTrack, displayStream);
+                }
+
+                // If user chose to share tab/system audio, mix it with microphone audio!
+                const screenAudioTrack = displayStream.getAudioTracks()[0];
+                if (screenAudioTrack) {
+                    this.mixScreenAudioWithMic(screenAudioTrack);
+                }
+
+                if (this.callTarget && this.peerConnection) {
+                    try {
+                        const offer = await this.peerConnection.createOffer();
+                        await this.peerConnection.setLocalDescription(offer);
+                        socket.emit('webrtc_signaling', {
+                            to: this.callTarget,
+                            from: myUsername,
+                            type: 'offer',
+                            sdp: offer.sdp,
+                            isVideo: true
+                        });
+                    } catch(renegErr) {
+                        console.warn("Screen share renegotiation error:", renegErr);
+                    }
+                    socket.emit('webrtc_signaling', {
+                        to: this.callTarget,
+                        from: myUsername,
+                        type: 'video_toggle',
+                        isVideoOn: true
+                    });
                 }
                 
                 screenTrack.onended = () => {
@@ -756,29 +893,45 @@ class WebRTCManager {
             }
         }
     }
+
+    mixScreenAudioWithMic(screenAudioTrack) {
+        try {
+            const micTrack = this.localStream ? this.localStream.getAudioTracks()[0] : null;
+            const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+            if (!AudioContextClass) return;
+            const audioCtx = new AudioContextClass();
+            this.screenAudioCtx = audioCtx;
+            const dest = audioCtx.createMediaStreamDestination();
+
+            if (micTrack) {
+                const micStream = new MediaStream([micTrack]);
+                const micSource = audioCtx.createMediaStreamSource(micStream);
+                micSource.connect(dest);
+            }
+
+            const screenStream = new MediaStream([screenAudioTrack]);
+            const screenSource = audioCtx.createMediaStreamSource(screenStream);
+            screenSource.connect(dest);
+
+            const mixedAudioTrack = dest.stream.getAudioTracks()[0];
+            this.mixedAudioTrack = mixedAudioTrack;
+
+            const audioSender = this.peerConnection ? this.peerConnection.getSenders().find(s => s.track && s.track.kind === 'audio') : null;
+            if (audioSender && mixedAudioTrack) {
+                audioSender.replaceTrack(mixedAudioTrack);
+                console.log("Screen audio mixed with microphone successfully");
+            }
+        } catch(e) {
+            console.warn("Could not mix screen audio with microphone:", e);
+        }
+    }
     
     toggleMute() {
         if(this.localStream) {
             const track = this.localStream.getAudioTracks()[0];
             if(track) {
                 track.enabled = !track.enabled;
-                const muteBtnEl = this.muteBtn;
-                const muteIcon = document.getElementById('mute-icon');
-                if(muteBtnEl) {
-                    const label = track.enabled ? 'Mute Microphone' : 'Unmute Microphone';
-                    muteBtnEl.title = label;
-                    muteBtnEl.setAttribute('aria-label', label);
-                    muteBtnEl.setAttribute('aria-pressed', (!track.enabled).toString());
-                    if (track.enabled) {
-                        muteBtnEl.classList.remove('muted-state');
-                        muteBtnEl.style.background = 'rgba(255, 255, 255, 0.12)';
-                        if (muteIcon) muteIcon.className = 'bi bi-mic-fill';
-                    } else {
-                        muteBtnEl.classList.add('muted-state');
-                        muteBtnEl.style.background = 'linear-gradient(135deg, #ef4444, #b91c1c)';
-                        if (muteIcon) muteIcon.className = 'bi bi-mic-mute-fill';
-                    }
-                }
+                this.updateMuteUIState(!track.enabled);
             }
         }
     }
@@ -789,6 +942,13 @@ class WebRTCManager {
                 console.log("Received renegotiation / ICE restart offer during active call from:", data.from);
                 const sdpStr = data.sdp || (data.offer ? data.offer.sdp : '');
                 if (sdpStr && this.peerConnection) {
+                    if (data.isVideo) {
+                        this.isVideoCall = true;
+                        const remoteVid = this.remoteVideo;
+                        const placeholder = this.audioPlaceholder;
+                        if (remoteVid) remoteVid.style.display = 'block';
+                        if (placeholder) placeholder.style.display = 'none';
+                    }
                     this.peerConnection.setRemoteDescription(new RTCSessionDescription({ type: 'offer', sdp: sdpStr }))
                     .then(() => this.peerConnection.createAnswer())
                     .then(answer => {
@@ -886,16 +1046,19 @@ class WebRTCManager {
             const remoteVideoOn = !!data.isVideoOn;
             console.log("Remote video toggle received:", remoteVideoOn);
             const remoteVid = this.remoteVideo;
+            const placeholder = this.audioPlaceholder;
             const avatarEl = document.getElementById('webrtc-avatar-container');
             if (remoteVideoOn) {
                 this.isVideoCall = true;
                 if (remoteVid) remoteVid.style.display = 'block';
+                if (placeholder) placeholder.style.display = 'none';
                 if (avatarEl) avatarEl.style.display = 'none';
             } else {
                 if (remoteVid) remoteVid.style.display = 'none';
                 const localVideoActive = this.localStream && this.localStream.getVideoTracks().some(t => t.enabled);
                 if (!localVideoActive) {
                     this.isVideoCall = false;
+                    if (placeholder) placeholder.style.display = 'flex';
                     if (avatarEl) avatarEl.style.display = 'flex';
                 }
             }
@@ -942,7 +1105,23 @@ class WebRTCManager {
         
         try {
             await this.loadWebRTCConfig(true);
-            this.localStream = await this.getAudioStream();
+            if (this.isVideoCall) {
+                try {
+                    this.localStream = await this.getVideoStream(true);
+                    const localVid = this.localVideo;
+                    if(localVid) {
+                        localVid.srcObject = this.localStream;
+                    }
+                    this.updateVideoUIState(true);
+                } catch(e) {
+                    console.warn("Could not access camera on video call accept, falling back to audio:", e);
+                    this.localStream = await this.getAudioStream();
+                    this.updateVideoUIState(false);
+                }
+            } else {
+                this.localStream = await this.getAudioStream();
+                this.updateVideoUIState(false);
+            }
             this.setupPeerConnection(target);
             
             const sdpOffer = typeof this.incomingOffer === 'string' ? this.incomingOffer : (this.incomingOffer && this.incomingOffer.sdp ? this.incomingOffer.sdp : (this.incomingSdp || ''));
@@ -1049,6 +1228,19 @@ class WebRTCManager {
             });
         }
 
+        // Ensure video transceiver is ready to send and receive video
+        try {
+            const hasVideoTransceiver = this.peerConnection.getTransceivers().some(t => 
+                (t.sender && t.sender.track && t.sender.track.kind === 'video') ||
+                (t.receiver && t.receiver.track && t.receiver.track.kind === 'video')
+            );
+            if (!hasVideoTransceiver) {
+                this.peerConnection.addTransceiver('video', { direction: 'sendrecv' });
+            }
+        } catch(e) {
+            console.warn("Could not ensure video transceiver:", e);
+        }
+
         // Ensure audio transceiver direction is sendrecv
         try {
             this.peerConnection.getTransceivers().forEach(transceiver => {
@@ -1092,7 +1284,10 @@ class WebRTCManager {
                     }
                 }
             } else if (event.track.kind === 'video') {
-                const remoteVid = document.getElementById('remote-video');
+                console.log("Remote video track arrived in ontrack:", event.track);
+                const remoteVid = this.remoteVideo || document.getElementById('remote-video');
+                const placeholder = this.audioPlaceholder || document.getElementById('call-audio-placeholder');
+                const avatarEl = document.getElementById('webrtc-avatar-container');
                 if (remoteVid) {
                     if (event.streams && event.streams[0]) {
                         remoteVid.srcObject = event.streams[0];
@@ -1100,7 +1295,16 @@ class WebRTCManager {
                         const newStream = new MediaStream([event.track]);
                         remoteVid.srcObject = newStream;
                     }
+                    this.isVideoCall = true;
+                    remoteVid.style.display = 'block';
+                    if (placeholder) placeholder.style.display = 'none';
+                    if (avatarEl) avatarEl.style.display = 'none';
                     remoteVid.play().catch(e => console.error("Remote video play blocked:", e));
+
+                    event.track.onunmute = () => {
+                        console.log("Remote video track unmuted, ensuring video is actively rendering");
+                        remoteVid.play().catch(_ => {});
+                    };
                 }
             }
         };
